@@ -104,9 +104,14 @@ def templating(mode: str, snakesdir: Path) -> None:
         for idx, name in enumerate(templates):
             print(f"[{idx}] {name}")
     elif mode == 'get':
+        for idx, name in enumerate(templates):
+            print(f"[{idx}] {name}")
         idx = int(input("Enter template number: "))
         copy_folder(template_dir / templates[idx], Path.cwd())
     elif mode == 'create':
+        print("Existing templates: ")
+        for idx, name in enumerate(templates):
+            print(f"[{idx}] {name}")
         name = input("New template name: ")
         dest = template_dir / name
         if dest.exists():
@@ -136,6 +141,16 @@ def remove_dir(p: Path) -> bool:
     try:
         if p.exists():
             shutil.rmtree(p)
+        return True
+    except Exception:
+        return False
+def remove_dir_soft(p: Path) -> bool:
+    try:
+        if not p.exists():
+            return True  # nothing to do
+        if any(p.iterdir()):
+            return False  # not empty, skip deletion
+        p.rmdir()  # only works if the directory is empty
         return True
     except Exception:
         return False
@@ -205,7 +220,7 @@ Template mode:
         # remove executable
         results.append(remove_file(exe_path))
         # remove output subdirectory only, not basedir
-        results.append(remove_dir(build_dir / output_sub))
+        remove_dir_soft(build_dir / output_sub)
         # remove build directory
         results.append(remove_dir(build_dir))
         # remove cache file

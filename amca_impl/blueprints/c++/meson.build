@@ -9,22 +9,53 @@ output_dir = '../compiled'  # Relative to meson.build location
 build_dir_where = 'build'  # Relative to meson.build location
 
 # Compiler arguments
-cpp_compiler_args = [   
-  # '-Og',
-  '-g',
-  '-Wall', 
-  '-Wextra',
-  '-pedantic',
-  # '-O2',
-  # '-lstdc++exp',
-  '-static-libgcc', 
+cpp_compiler_args = [
+  # '-Og'
+  '-g',                   # debug info
+  '-Wall',                # all warnings
+  '-Wextra',              # extra warnings
+  '-pedantic',            # strict standard compliance
+  '-static-libgcc',
   '-static-libstdc++',
-  '-fno-rtti',
+  '-fno-rtti',            # disable RTTI
+  '-ffast-math',          # allow unsafe floating-point optimizations
+  '-funroll-loops',       # unroll small loops for speed
+  '-fstrict-aliasing',    # allow strict aliasing optimizations
+  '-march=native',        # optimize for local CPU
+  '-O2',                  # moderate optimization, fast but safe
+  # '-Ofast',             # optional: aggressive optimization (may break strict standards)
 ]
 c_compiler_args = [
-  '-static-libgcc', 
+  '-Wall',
+  '-Wextra',
+  '-g',
+  '-static-libgcc',
   '-static-libstdc++',
+  '-ffast-math',
+  '-funroll-loops',
+  '-fstrict-aliasing',
+  '-march=native',
+  '-O2',
+  '-mtune=native',
+  '-fomit-frame-pointer'
 ]
+
+# cpp_compiler_args = [   
+#   # '-Og',
+#   '-g',
+#   '-Wall', 
+#   '-Wextra',
+#   '-pedantic',
+#   # '-O2',
+#   # '-lstdc++exp',
+#   '-static-libgcc', 
+#   '-static-libstdc++',
+#   '-fno-rtti',
+# ]
+# c_compiler_args = [
+#   '-static-libgcc', 
+#   '-static-libstdc++',
+# ]
 
 # Normalize paths
 output_dir = output_dir.replace('/', '\\')

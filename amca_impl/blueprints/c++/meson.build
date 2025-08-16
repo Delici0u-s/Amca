@@ -77,16 +77,19 @@ foreach item : dependencies_str
   dependencies += dependency(item)
 endforeach
 
-# get localappdata path
-localappdata_cmd = run_command('cmd', '/c', 'echo %LOCALAPPDATA%', check : false)
-if localappdata_cmd.returncode() == 0
-  localappdata_path = localappdata_cmd.stdout().strip()
-else
-  error('Failed to retrieve LOCALAPPDATA path.')
-endif
+snakes_path = run_command('py', '-c', '''
+import os, sys, platform, pathlib
+if os.name == "nt":
+    print(os.path.join(os.environ["LOCALAPPDATA"], "amca", "snakes"))
+elif sys.platform == "darwin":
+    print(str(pathlib.Path.home() / "Library/Application Support/amca/snakes"))
+else:
+    base = os.environ.get("XDG_DATA_HOME", str(pathlib.Path.home() / ".local/share"))
+    print(os.path.join(base, "amca", "snakes"))
+''', check: true).stdout().strip()
 
-# Use a custom Python globber to list all source files.
-source_files = run_command('python', localappdata_path + '\\amca\\snakes\\globber.py', './', '*.cpp', '*.cxx', '*.cc', '*.c', check : true).stdout().strip().split('\n')
+# Use the custom Python globber to list all source files.
+source_files = run_command('py', snakes_path + '/globber.py', './', '*.cpp', '*.cxx', '*.cc', '*.c', check: true).stdout().strip().split('\n')
 
 # Include directories
 if fs.is_dir('./include/')

@@ -23,8 +23,33 @@ def find_meson_root(start: Path, max_depth: int) -> Path:
     sys.exit(1)
 
 
+# def get_snakes_dir() -> Path:
+#     return Path(os.environ.get('LOCALAPPDATA', '')) / 'amca' / 'snakes'
 def get_snakes_dir() -> Path:
-    return Path(os.environ.get('LOCALAPPDATA', '')) / 'amca' / 'snakes'
+    if os.name == 'nt':  # Windows
+        return Path(os.environ['LOCALAPPDATA']) / 'amca' / 'snakes'
+    elif sys.platform == 'darwin':  # macOS
+        return Path.home() / 'Library' / 'Application Support' / 'amca' / 'snakes'
+    else:  # Linux, BSD, etc.
+        base = os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local' / 'share'))
+        return Path(base) / 'amca' / 'snakes'
+
+def copy_to_clipboard(text: str) -> None:
+    if os.name == 'nt':
+        os.system(f'echo {text.strip()} | clip')
+    elif sys.platform == 'darwin':
+        p = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
+        p.communicate(input=text.encode())
+    else:  # Linux / BSD
+        if shutil.which("xclip"):
+            p = subprocess.Popen(['xclip', '-selection', 'clipboard'], stdin=subprocess.PIPE)
+            p.communicate(input=text.encode())
+        elif shutil.which("wl-copy"):
+            p = subprocess.Popen(['wl-copy'], stdin=subprocess.PIPE)
+            p.communicate(input=text.encode())
+        else:
+            print("No clipboard utility found (install xclip or wl-clipboard).")
+
 
 # --- Source Cache ---
 
@@ -285,7 +310,8 @@ Template mode:
             os.system('cls' if os.name=='nt' else 'clear')
         if args.m:
             clip = f"cd {exe_path.parent}\n{exe_path} {' '.join(args.Ae)}"
-            os.system(f'echo {clip} | clip')
+            copy_to_clipboard(clip)
+            # os.system(f'echo {clip} | clip')
             print("Commands copied to clipboard.")
             sys.exit(0)
         try:

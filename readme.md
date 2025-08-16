@@ -2,11 +2,26 @@
 
 ## Requirements
 
-- A properly setup c++20 compiler that is aliased to "c++" to the command prompt.
+- A properly setup c compiler that is aliased to "gcc" to the command prompt.
 - the meson build system.
 - python 3.x.x or newer.
+
+Windows:
 - powershell
+- ```cp``` command
 
 ## Installation
 
-- simply call INSTALL.bat
+Windows:
+- run:
+- ```INSTALL.bat```
+Linux/MacOS: 
+- run:
+- ```chmod +x INSTALL.sh amca_impl/setpath.sh```
+- ```./INSTALL.sh```
+- manually create an alias, as im not gud enough
+
+Tools that will be added: ```amca```
+Automatic meson compiler (amca) will be added to your path
+
+to inquire about how it works run ```amca --help```

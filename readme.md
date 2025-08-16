@@ -17,7 +17,7 @@ Windows:
 - ```INSTALL.bat```
 Linux/MacOS: 
 - run:
-- ```chmod +x INSTALL.sh amca_impl/setpath.sh```
+- ```chmod +x INSTALL.sh```
 - ```./INSTALL.sh```
 - manually create an alias, as im not gud enough
 

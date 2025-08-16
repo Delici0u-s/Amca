@@ -7,6 +7,7 @@ set -euo pipefail
 # - uses rsync if available
 # - updates user's shell profile safely (marker block)
 # - adds universal alias permanently
+# - creates system-wide symlink to /usr/bin/amca
 
 # find script dir (repo root assumed to be one level up if script in project root)
 SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
@@ -172,12 +173,23 @@ for pf in "${PROFILE_FILES[@]}"; do
   esac
 done
 
+# create system-wide symlink
+LINK_TARGET="/usr/bin/amca"
+if [ -f "$BIN_DIR/amca" ]; then
+  echo "Creating system-wide symlink at $LINK_TARGET..."
+  if sudo ln -sf "$BIN_DIR/amca" "$LINK_TARGET"; then
+    echo "Symlink created: $LINK_TARGET -> $BIN_DIR/amca"
+  else
+    echo "Warning: failed to create symlink at $LINK_TARGET. You may need to run this manually."
+  fi
+fi
+
 echo ""
 echo "Installation summary:"
 echo " - snakes installed to: $AMCA_BASE/snakes"
 echo " - templates installed to: $AMCA_BASE/templates"
 echo " - runner installed to: $BIN_DIR/amca (if compiled)"
 echo " - alias 'amca' -> 'xpath' added to shell profile"
+echo " - system-wide symlink: /usr/bin/amca -> $BIN_DIR/amca"
 echo ""
-echo "What you need to do:"
-echo "  Create an alias for $BIN_DIR/amca so you can easily call it from anywhere"
+echo "You can now run 'amca' from anywhere."

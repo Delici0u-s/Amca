@@ -19,7 +19,6 @@ Linux/MacOS:
 - run:
 - ```chmod +x INSTALL.sh```
 - ```./INSTALL.sh```
-- manually create an alias, as im not gud enough
 
 Tools that will be added: ```amca```
 Automatic meson compiler (amca) will be added to your path

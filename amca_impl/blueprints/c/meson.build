@@ -44,7 +44,7 @@ foreach item : dependencies_str
   dependencies += dependency(item)
 endforeach
 
-snakes_path = run_command('py', '-c', '''
+snakes_path = run_command('python', '-c', '''
 import os, sys, platform, pathlib
 if os.name == "nt":
     print(os.path.join(os.environ["LOCALAPPDATA"], "amca", "snakes"))
@@ -56,7 +56,7 @@ else:
 ''', check: true).stdout().strip()
 
 # Use the custom Python globber to list all source files.
-source_files = run_command('py', snakes_path + '/globber.py', './', '*.cpp', '*.cxx', '*.cc', '*.c', check: true).stdout().strip().split('\n')
+source_files = run_command('python', snakes_path + '/globber.py', './', '*.cpp', '*.cxx', '*.cc', '*.c', check: true).stdout().strip().split('\n')
 
 
 # Include directories

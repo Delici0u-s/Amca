@@ -1,0 +1,18 @@
+{
+  "plugin_config": {
+    "plugin_paths": [
+      "D:\\programming\\git_repos\\Amca\\amca\\plugins"
+    ],
+    "active_plugins": [
+      "git",
+      "git.py",
+      "pl_meson",
+      "any",
+      "ASD"
+    ]
+  },
+  "amca_config": {
+    "print_info": false,
+    "disable_logs": false
+  }
+}

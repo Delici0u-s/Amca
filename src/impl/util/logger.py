@@ -217,8 +217,3 @@ if __name__ == "__main__":
     log.log("This will not appear anywhere")
     log.set_mode("both")
     log.ERROR("Fatal crash", 2)
-
-
-glog: Logger = Logger(
-    log_path=(Path(__file__) / ".." / ".." / ".." / "logs" / "global_log.log")
-)

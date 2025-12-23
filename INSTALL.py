@@ -95,7 +95,9 @@ int main(int argc, char *argv[]) {{
         # macros = f'#define PYTHON_EXEC "{venv_python_location}"\n#define PYTHON_FILE "{script_path}"\n'
         macros = ""
         if sys.platform == "win32":
-            macros = f'#define PYTHON_EXEC "{str(venv_python_location).replace("\\", "\\\\")}"\n#define PYTHON_FILE "{str(script_path).replace("\\", "\\\\")}"\n'
+            py_exec_escaped = str(venv_python_location).replace("\\", "\\\\")
+            py_file_escaped = str(script_path).replace("\\", "\\\\")
+            macros = f'#define PYTHON_EXEC "{py_exec_escaped}"\n#define PYTHON_FILE "{py_file_escaped}"\n'
         else:
             macros = f'#define PYTHON_EXEC "{venv_python_location}"\n#define PYTHON_FILE "{script_path}"\n'
 

@@ -5,7 +5,7 @@ import tempfile
 
 
 # create venv
-def create_venv() -> Path | None:
+def create_venv():  # -> Path | None
     try:
 
         python_exec = sys.executable
@@ -77,21 +77,24 @@ int main(int argc, char *argv[]) {{
         # Define the macros for this compilation
         macros = f'#define PYTHON_EXEC "{venv_python_location}"\n#define PYTHON_FILE "{script_path}"\n'
 
-        # Write C code to a temporary file
-        with tempfile.NamedTemporaryFile("w", suffix=".c", delete=True) as f:
+        # Path to write the C source code (inside compiled_path)
+        c_file_path = compiled_path / f"{script_path.stem}.c"
+
+        # Write C code to file
+        with open(c_file_path, "w") as f:
             f.write(macros)
             f.write(runner_str_code)
-            f.flush()  # Make sure content is written before compilation
 
-            # Compile the C code
-            output_path = compiled_path / script_path.stem
-            subprocess.run(["cc", f.name, "-o", str(output_path)], check=True)
+        # Compile the C code
+        output_path = compiled_path / script_path.stem
+        subprocess.run(["cc", str(c_file_path), "-o", str(output_path)], check=True)
 
     return venv_python_location
 
 
 def main():
-    venv_path: Path | None = create_venv()
+    # venv_path: Path | None = create_venv()
+    venv_path = create_venv()
 
     if venv_path is not None:
         create_runners(venv_path)

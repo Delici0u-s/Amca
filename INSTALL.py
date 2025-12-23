@@ -30,9 +30,9 @@ def create_venv() -> Path | None:
 
 
 def create_runners(venv_path: Path) -> Path:
-    runner_str_code = r"""
+    runner_str_code: str = """
 #include <stdio.h>
-#include <stdlib.h>
+
 #ifdef _WIN32
 #include <process.h> // _execvp
 #define execvp _execvp
@@ -41,57 +41,53 @@ def create_runners(venv_path: Path) -> Path:
 #endif
 
 int main(int argc, char *argv[]) {{
-    char *exec_argv[argc + 2];
-    exec_argv[0] = "{python}";
-    exec_argv[1] = "{script}";
 
+    // +2 because argv[0] = program name, argv[1] = script, plus NULL terminator
+    char *exec_argv[argc + 2];
+
+    exec_argv[0] = PYTHON_EXEC;   // Python interpreter
+    exec_argv[1] = PYTHON_FILE;   // Script to run
+
+    // Pass through any extra arguments
     for (int i = 1; i < argc; ++i) {{
         exec_argv[i + 1] = argv[i];
     }}
 
     exec_argv[argc + 1] = NULL;
 
-    execvp(exec_argv[0], exec_argv);
-
-    perror("execvp failed");
-    return 1;
+    return execvp(PYTHON_EXEC, exec_argv);
 }}
-"""
+    """
 
-    # Platform-specific Python executable
-    venv_python = venv_path / (
-        "Scripts/python.exe" if sys.platform == "win32" else "bin/python3"
-    )
+    on_windows: bool = sys.platform == "win32"
 
-    # Paths
-    src_path = (Path(__file__).parent / "src").resolve()
-    compiled_path = (Path(__file__).parent / "runners").resolve()
+    # Path to Python executable inside the virtual environment
+    venv_python_location = venv_path / ("Scripts" if on_windows else "bin") / "python3"
+
+    # Source and output directories
+    src_path: Path = (Path(__file__).parent / "src").resolve()
+    compiled_path: Path = (Path(__file__).parent / "runners").resolve()
     compiled_path.mkdir(exist_ok=True)
 
-    apps = [src_path / i for i in ["amca.py", "amcapl.py"]]
+    # Scripts to create runners for
+    amca_scripts = ["amca.py", "amcapl.py"]
+    for script in amca_scripts:
+        script_path = src_path / script
 
-    for app in apps:
-        # Fill in placeholders
-        code = runner_str_code.format(python=venv_python, script=app)
+        # Define the macros for this compilation
+        macros = f'#define PYTHON_EXEC "{venv_python_location}"\n#define PYTHON_FILE "{script_path}"\n'
 
-        # Write C code to a temp file
-        with tempfile.NamedTemporaryFile("w", suffix=".c", delete=False) as f:
-            f.write(code)
-            c_file_path = Path(f.name)
+        # Write C code to a temporary file
+        with tempfile.NamedTemporaryFile("w", suffix=".c", delete=True) as f:
+            f.write(macros)
+            f.write(runner_str_code)
+            f.flush()  # Make sure content is written before compilation
 
-        # Determine compiler
-        if sys.platform == "win32":
-            compiler = "gcc"  # You can switch to "cl" if MSVC is installed
-            output_file = compiled_path / (app.stem + ".exe")
-        else:
-            compiler = "cc"
-            output_file = compiled_path / app.stem
+            # Compile the C code
+            output_path = compiled_path / script_path.stem
+            subprocess.run(["cc", f.name, "-o", str(output_path)], check=True)
 
-        # Compile the runner
-        subprocess.run([compiler, str(c_file_path), "-o", str(output_file)], check=True)
-        print(f"Runner created: {output_file}")
-
-    return venv_python
+    return venv_python_location
 
 
 def main():

@@ -59,10 +59,22 @@ int main(int argc, char *argv[]) {{
 }}
     """
 
-    on_windows: bool = sys.platform == "win32"
+    possible_paths = [
+        venv_path / "bin" / "pytho3n",
+        venv_path / "bin" / "python",
+        venv_path / "Scripts" / "python3.exe",
+        venv_path / "Scripts" / "python.exe",
+    ]
 
-    # Path to Python executable inside the virtual environment
-    venv_python_location = venv_path / ("Scripts" if on_windows else "bin") / "python3"
+    venv_python_location = Path()
+    for path in possible_paths:
+        if path.exists():
+            venv_python_location = path
+            break
+
+    if venv_python_location is None:
+        print("Could not find venv python executable")
+        SystemExit(1)
 
     # Source and output directories
     src_path: Path = (Path(__file__).parent / "src").resolve()

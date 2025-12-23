@@ -34,8 +34,8 @@ def create_runners(venv_path: Path) -> Path:
 #include <stdio.h>
 
 #ifdef _WIN32
-#include <process.h> // _execvp
-#define execvp _execvp
+#include <process.h> 
+# define execvp _execvp
 #else
 #include <unistd.h> // execvp
 #endif
@@ -55,7 +55,12 @@ int main(int argc, char *argv[]) {{
 
     exec_argv[argc + 1] = NULL;
 
+    //return execvp(PYTHON_EXEC, exec_argv);
+#ifdef _WIN32
+    return _spawnvp(_P_WAIT, PYTHON_EXEC, exec_argv);
+#else
     return execvp(PYTHON_EXEC, exec_argv);
+#endif
 }}
     """
 

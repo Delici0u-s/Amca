@@ -43,13 +43,14 @@ def create_runners(venv_path: Path) -> Path:
 int main(int argc, char *argv[]) {{
 
     // +2 because argv[0] = program name, argv[1] = script, plus NULL terminator
-    char *exec_argv[argc + 1];
+    char *exec_argv[argc + 2];
 
-    exec_argv[0] = PYTHON_FILE;   // Script to run
+    exec_argv[0] = PYTHON_EXEC;   // Python interpreter
+    exec_argv[1] = PYTHON_FILE;   // Script to run
 
     // Pass through any extra arguments
     for (int i = 1; i < argc; ++i) {{
-        exec_argv[i] = argv[i];
+        exec_argv[i + 1] = argv[i];
     }}
 
     exec_argv[argc + 1] = NULL;
@@ -91,7 +92,12 @@ int main(int argc, char *argv[]) {{
         script_path = src_path / script
 
         # Define the macros for this compilation
-        macros = f'#define PYTHON_EXEC "{venv_python_location}"\n#define PYTHON_FILE "{script_path}"\n'
+        # macros = f'#define PYTHON_EXEC "{venv_python_location}"\n#define PYTHON_FILE "{script_path}"\n'
+        macros = ""
+        if sys.platform == "win32":
+            macros = f'#define PYTHON_EXEC "{str(venv_python_location).replace("\\", "\\\\")}"\n#define PYTHON_FILE "{str(script_path).replace("\\", "\\\\")}"\n'
+        else:
+            macros = f'#define PYTHON_EXEC "{venv_python_location}"\n#define PYTHON_FILE "{script_path}"\n'
 
         # Path to write the C source code (inside compiled_path)
         c_file_path = compiled_path / f"{script_path.stem}.c"

@@ -43,14 +43,13 @@ def create_runners(venv_path: Path) -> Path:
 int main(int argc, char *argv[]) {{
 
     // +2 because argv[0] = program name, argv[1] = script, plus NULL terminator
-    char *exec_argv[argc + 2];
+    char *exec_argv[argc + 1];
 
-    exec_argv[0] = PYTHON_EXEC;   // Python interpreter
-    exec_argv[1] = PYTHON_FILE;   // Script to run
+    exec_argv[0] = PYTHON_FILE;   // Script to run
 
     // Pass through any extra arguments
     for (int i = 1; i < argc; ++i) {{
-        exec_argv[i + 1] = argv[i];
+        exec_argv[i] = argv[i];
     }}
 
     exec_argv[argc + 1] = NULL;

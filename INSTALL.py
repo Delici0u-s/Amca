@@ -1,127 +1,179 @@
 import sys
 import subprocess
 from pathlib import Path
-import tempfile
+from typing import Optional, Set, Tuple
+import shutil
+
+# Track installed packages WITH versions
+installed_pip_dependencies: Set[Tuple[str, str]] = set()
+
+# Explicit unset state
+python_exec_path: Optional[Path] = None
 
 
-# create venv
-def create_venv():  # -> Path | None
-    try:
-
-        python_exec = sys.executable
-        venv_path = (Path(__file__).parent / "src" / ".venv").resolve()
-
-        if venv_path.exists():
-            print(
-                f"Virtual environment already exists at {venv_path}\n    Remove it to create a new one"
-            )
-            return venv_path
-        subprocess.run([python_exec, "-m", "venv", str(venv_path)], check=True)
-        print(f"Virtual environment created at {venv_path}")
-
-        pip_path = venv_path / (
-            "Scripts/pip.exe" if sys.platform == "win32" else "bin/pip"
-        )
-
-        subprocess.run([str(pip_path), "install", "--upgrade", "pip"], check=True)
-        return venv_path
-    except:
-        return None
+def remove_dir(path: Path) -> None:
+    if path.exists() and path.is_dir():
+        shutil.rmtree(path)
 
 
-def create_runners(venv_path: Path) -> Path:
-    runner_str_code: str = """
-#include <stdio.h>
+def remove_file(path: Path) -> None:
+    if path.exists() and path.is_file():
+        path.unlink()
 
-#ifdef _WIN32
-#include <process.h> 
-# define execvp _execvp
-#else
-#include <unistd.h> // execvp
-#endif
 
-int main(int argc, char *argv[]) {{
-
-    // +2 because argv[0] = program name, argv[1] = script, plus NULL terminator
-    char *exec_argv[argc + 2];
-
-    exec_argv[0] = PYTHON_EXEC;   // Python interpreter
-    exec_argv[1] = PYTHON_FILE;   // Script to run
-
-    // Pass through any extra arguments
-    for (int i = 1; i < argc; ++i) {{
-        exec_argv[i + 1] = argv[i];
-    }}
-
-    exec_argv[argc + 1] = NULL;
-
-    //return execvp(PYTHON_EXEC, exec_argv);
-#ifdef _WIN32
-    return _spawnvp(_P_WAIT, PYTHON_EXEC, exec_argv);
-#else
-    return execvp(PYTHON_EXEC, exec_argv);
-#endif
-}}
+def identify_python_path_from_venv(venv_path: Path) -> None:
     """
+    Locate the Python executable inside a virtual environment.
+    """
+    global python_exec_path
+
+    if python_exec_path is not None:
+        return
 
     possible_paths = [
-        venv_path / "bin" / "pytho3n",
-        venv_path / "bin" / "python",
+        venv_path / "bin" / "python3",
         venv_path / "Scripts" / "python3.exe",
+        venv_path / "bin" / "python",
         venv_path / "Scripts" / "python.exe",
     ]
 
-    venv_python_location = Path()
     for path in possible_paths:
         if path.exists():
-            venv_python_location = path
-            break
+            python_exec_path = path
+            return
 
-    if venv_python_location is None:
-        print("Could not find venv python executable")
-        SystemExit(1)
+    print(f"Python executable not found in {venv_path}")
+    raise SystemExit(1)
 
-    # Source and output directories
-    src_path: Path = (Path(__file__).parent / "src").resolve()
-    compiled_path: Path = (Path(__file__).parent / "runners").resolve()
-    compiled_path.mkdir(exist_ok=True)
 
-    # Scripts to create runners for
-    amca_scripts = ["amca.py", "amcapl.py"]
-    for script in amca_scripts:
-        script_path = src_path / script
+def _ensure_python_path() -> None:
+    if python_exec_path is None:
+        raise RuntimeError("Virtual environment Python path not initialized")
 
-        # Define the macros for this compilation
-        # macros = f'#define PYTHON_EXEC "{venv_python_location}"\n#define PYTHON_FILE "{script_path}"\n'
-        macros = ""
-        if sys.platform == "win32":
-            py_exec_escaped = str(venv_python_location).replace("\\", "\\\\")
-            py_file_escaped = str(script_path).replace("\\", "\\\\")
-            macros = f'#define PYTHON_EXEC "{py_exec_escaped}"\n#define PYTHON_FILE "{py_file_escaped}"\n'
-        else:
-            macros = f'#define PYTHON_EXEC "{venv_python_location}"\n#define PYTHON_FILE "{script_path}"\n'
 
-        # Path to write the C source code (inside compiled_path)
-        c_file_path = compiled_path / f"{script_path.stem}.c"
+def package_install(package: str, version: str, print_output: bool = False) -> bool:
+    """
+    Install a specific package version into the venv.
+    """
+    _ensure_python_path()
 
-        # Write C code to file
-        with open(c_file_path, "w") as f:
-            f.write(macros)
-            f.write(runner_str_code)
+    package = package.lower()
+    key = (package, version)
 
-        # Compile the C code
-        output_path = compiled_path / script_path.stem
-        subprocess.run(["cc", str(c_file_path), "-o", str(output_path)], check=True)
+    if key in installed_pip_dependencies:
+        return True
 
-    return venv_python_location
+    try:
+        cmd = [
+            str(python_exec_path),
+            "-m",
+            "pip",
+            "install",
+            f"{package}=={version}",
+        ]
+
+        print(f"Installing: {package}, with version {version}")
+
+        subprocess.run(
+            cmd,
+            check=True,
+            stdout=None if print_output else subprocess.DEVNULL,
+            stderr=None if print_output else subprocess.DEVNULL,
+        )
+
+        installed_pip_dependencies.add(key)
+        return True
+
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to install {package}=={version}")
+        print(e)
+        return False
+
+
+# returns -7765 if execution failed
+def package_call(module: str, *args, print_output: bool = False) -> int:
+    _ensure_python_path()
+
+    try:
+        result = subprocess.run(
+            [str(python_exec_path), "-m", module, *map(str, args)],
+            check=True,
+            stdout=None if print_output else subprocess.DEVNULL,
+            stderr=None if print_output else subprocess.DEVNULL,
+        )
+        return result.returncode
+
+    except subprocess.CalledProcessError as e:
+        print(f"Module call failed: {module}")
+        print(e)
+        return -7765
+
+
+def create_venv() -> None:
+    python_exec = sys.executable
+    venv_path = (Path(__file__).parent / "src" / ".venv").resolve()
+
+    print_output: bool = False
+
+    if not venv_path.exists():
+        subprocess.run(
+            [python_exec, "-m", "venv", str(venv_path)],
+            check=True,
+            stdout=None if print_output else subprocess.DEVNULL,
+            stderr=None if print_output else subprocess.DEVNULL,
+        )
+        print(f"Virtual environment created at {venv_path}")
+    else:
+        print(f"Using existing venv at {venv_path}")
+
+    identify_python_path_from_venv(venv_path)
+
+    # ALWAYS ensure pip works
+    subprocess.run(
+        [str(python_exec_path), "-m", "ensurepip", "--upgrade"],
+        check=True,
+        stdout=None if print_output else subprocess.DEVNULL,
+        stderr=None if print_output else subprocess.DEVNULL,
+    )
+
+    package_install("pip", "24.0")
+
+
+def create_runners():
+    if package_install("pyinstaller", "6.2.0"):
+        src_path: Path = (Path(__file__).parent / "src").resolve()
+        compiled_path: Path = (Path(__file__).parent / "runners").resolve()
+        compiled_path.mkdir(exist_ok=True)
+
+        # Scripts to create runners for
+        amca_scripts = ["amca.py", "amcapl.py"]
+        for script in amca_scripts:
+            script_path = src_path / script
+            print(f"Creating {script.split('.')[0]} executable")
+            package_call(
+                "PyInstaller",
+                script_path,
+                "--distpath",
+                compiled_path,
+                "--onefile",
+                "--strip",
+                "--noconfirm",
+                "--clean",
+            )
+        root = Path(__file__).parent
+        build_path = root / "build"
+        remove_dir(build_path)
+        for script in amca_scripts:
+            remove_file(root / (script.split(".")[0] + ".spec"))
+    else:
+        print("Could not create executables, failed to install pyinstaller")
+        raise SystemExit(1)
 
 
 def main():
     # venv_path: Path | None = create_venv()
-    venv_path = create_venv()
-
-    if venv_path is not None:
-        create_runners(venv_path)
+    create_venv()
+    create_runners()
 
 
 if __name__ == "__main__":

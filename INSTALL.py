@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional, Set, Tuple
 import shutil
 
+
 # Track installed packages WITH versions
 installed_pip_dependencies: Set[Tuple[str, str]] = set()
 
@@ -111,7 +112,7 @@ def package_call(module: str, *args, print_output: bool = False) -> int:
 
 def create_venv() -> None:
     python_exec = sys.executable
-    venv_path = (Path(__file__).parent / "src" / ".venv").resolve()
+    venv_path = (Path(__file__).parent / "compiled" / ".venv").resolve()
 
     print_output: bool = False
 
@@ -139,13 +140,13 @@ def create_venv() -> None:
     package_install("pip", "24.0")
 
 
-def create_runners():
-    if package_install("pyinstaller", "6.2.0"):
+def create_compiled():
+    if package_install("pyinstaller", "6.10.0"):
         src_path: Path = (Path(__file__).parent / "src").resolve()
-        compiled_path: Path = (Path(__file__).parent / "runners").resolve()
+        compiled_path: Path = (Path(__file__).parent / "compiled").resolve()
         compiled_path.mkdir(exist_ok=True)
 
-        # Scripts to create runners for
+        # Scripts to create compiled for
         amca_scripts = ["amca.py", "amcapl.py"]
         for script in amca_scripts:
             script_path = src_path / script
@@ -155,7 +156,7 @@ def create_runners():
                 script_path,
                 "--distpath",
                 compiled_path,
-                "--onefile",
+                "--onedir",
                 "--strip",
                 "--noconfirm",
                 "--clean",
@@ -173,7 +174,7 @@ def create_runners():
 def main():
     # venv_path: Path | None = create_venv()
     create_venv()
-    create_runners()
+    create_compiled()
 
 
 if __name__ == "__main__":

@@ -190,6 +190,8 @@ class Settings:
             with self._path.open("rb") as f:
                 return pickle.load(f)
         text = self._path.read_text(encoding="utf-8")
+        if not text:
+            return {}
         if self._backend == "json":
             return json.loads(text)
         else:

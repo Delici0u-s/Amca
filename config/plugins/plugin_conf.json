@@ -4,7 +4,9 @@
     "exit_on_plugin_not_found": false,
     "plugin_path": "/home/quad/programming/guts/Amca/config/plugins/installed_plugins"
   },
-  "enabled_plugins": [],
+  "enabled_plugins": [
+    "test"
+  ],
   "logging": {
     "warn_if_plugin_not_found": true,
     "print_loaded": true

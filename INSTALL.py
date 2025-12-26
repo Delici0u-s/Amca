@@ -174,6 +174,7 @@ def create_compiled():
 def main():
     # venv_path: Path | None = create_venv()
     create_venv()
+    package_install("InquirerPy", "0.3.3")
     create_compiled()
 
 

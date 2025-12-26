@@ -1,5 +1,5 @@
 import argparse as ap
-from impl.amca_pl_impl import enable, disable, install, uninstall, call
+from impl.amca_pl_impl import enable, disable, install, uninstall, call, toggle
 
 
 def eval_args():
@@ -18,6 +18,10 @@ def eval_args():
     subparsers.add_parser(
         "disable", aliases=["d"], help="disable an installed plugin"
     ).set_defaults(func=disable.load)
+
+    subparsers.add_parser(
+        "toggle", aliases=["t"], help="toggle enabled/disabled for plugins"
+    ).set_defaults(func=toggle.load)
 
     subparsers.add_parser(
         "install", aliases=["i"], help="install an plugin from added sources"

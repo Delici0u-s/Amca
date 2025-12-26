@@ -19,32 +19,42 @@ def load():
     path_info = gdp.parse_dir(plugin_path)
     all_plugins = [str(p) for p in path_info.folders]
 
-    # Get enabled plugins
     enabled_plugins = [str(p) for p in cf.plugin_settings.get("enabled_plugins") or []]
 
-    if not enabled_plugins:
-        print("No plugins are currently enabled!")
+    if not all_plugins:
+        print("No plugins available in the plugin path!")
         return
 
-    print("\nEnabled Plugins:")
-    # Interactive selection loop
+    print("Available plugins")
+
+    last_index = 0  # Track the last cursor position
+
     while True:
+        # Build choices with enabled/disabled mark
+        choices = [f"[{'X' if p in enabled_plugins else ' '}] {p}" for p in all_plugins]
+        choices.append("Exit selection")
+
         choice = inquirer.select(
-            message="Pick a plugin to disable (or exit selection):",
-            choices=[*enabled_plugins, "Exit selection"],
+            message="Toggle plugins (X = enabled):",
+            choices=choices,
+            default=choices[last_index],  # Keep cursor at last selected
         ).execute()
 
         if choice == "Exit selection":
             break
 
-        # Update enabled plugins list
-        enabled_plugins.remove(choice)
-        all_plugins.append(choice)  # optional if you want to show it again as available
+        # Update last_index to the index of selected item
+        last_index = choices.index(choice)
 
-        if not enabled_plugins:
-            print("No more plugins to disable.")
-            break
+        # Extract plugin name from choice string
+        plugin_name = choice[4:]
 
-    # Save updated enabled_plugins back to config
+        # Toggle plugin
+        if plugin_name in enabled_plugins:
+            enabled_plugins.remove(plugin_name)
+        else:
+            enabled_plugins.append(plugin_name)
+
+    # Save changes
     cf.plugin_settings.set("enabled_plugins", enabled_plugins)
     cf.plugin_settings.save()

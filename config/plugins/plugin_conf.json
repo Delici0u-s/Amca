@@ -1,0 +1,12 @@
+{
+  "generic": {
+    "exit_on_plugin_error": false,
+    "exit_on_plugin_not_found": false,
+    "plugin_path": "/home/quad/programming/guts/Amca/config/plugins/installed_plugins"
+  },
+  "enabled_plugins": [],
+  "logging": {
+    "warn_if_plugin_not_found": true,
+    "print_loaded": true
+  }
+}

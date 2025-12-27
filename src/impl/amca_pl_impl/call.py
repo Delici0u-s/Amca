@@ -2,4 +2,7 @@ import sys
 
 
 def load():
-    print("Loaded call", sys.argv)
+    # TODO
+    # call specific plugins
+
+    print("To be implemented")

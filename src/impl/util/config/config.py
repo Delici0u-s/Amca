@@ -1,3 +1,4 @@
+from impl.util.github import gen_github_api_link
 from impl.util.settings import Settings
 import sys
 from pathlib import Path
@@ -41,6 +42,14 @@ class _SettingsManager:
             s.default("enabled_plugins", [])
             s.default("logging.warn_if_plugin_not_found", True)
             s.default("logging.print_loaded", True)
+            s.default(
+                "plugin_sources",
+                [
+                    gen_github_api_link(
+                        "Delici0u-s", "Amca", "rewrite", "preset_plugins"
+                    )
+                ],
+            )
             self._all_settings["plugins"] = s
 
 

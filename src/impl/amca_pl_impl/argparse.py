@@ -1,5 +1,6 @@
 import argparse as ap
 from impl.amca_pl_impl import enable, disable, install, uninstall, call, toggle
+import sys
 
 
 def eval_args():
@@ -36,5 +37,7 @@ def eval_args():
     ).set_defaults(func=call.load)
 
     args, _ = parser.parse_known_args()
+
+    sys.argv.pop(1)
 
     args.func()

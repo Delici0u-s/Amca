@@ -27,6 +27,7 @@ class _SettingsManager:
             general_config = config_path / "general_conf.json"
             s = Settings(str(general_config), auto_save=True, backend="json")
             s.default("extreamly_important.greet_user", True)
+            s.default("debug", False)
             self._all_settings["general"] = s
 
         elif key == "plugins":
@@ -41,6 +42,7 @@ class _SettingsManager:
             s.default("generic.plugin_path", str(installed_plugins))
             s.default("enabled_plugins", [])
             s.default("logging.warn_if_plugin_not_found", True)
+            s.default("logging.warn_if_plugin_arg_not_enabled", True)
             s.default("logging.print_loaded", True)
             s.default(
                 "plugin_sources",

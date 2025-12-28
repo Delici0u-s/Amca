@@ -1,5 +1,13 @@
 import argparse as ap
-from impl.amca_pl_impl import enable, disable, install, uninstall, call, toggle
+from impl.amca_pl_impl import (
+    enable,
+    disable,
+    install,
+    uninstall,
+    call,
+    toggle,
+    list as lip,
+)
 import sys
 
 
@@ -35,6 +43,10 @@ def eval_args():
     subparsers.add_parser(
         "call", aliases=["c"], help="call specific plugins"
     ).set_defaults(func=call.load)
+
+    subparsers.add_parser("list", aliases=["l"], help="list all plugins").set_defaults(
+        func=lip.load
+    )
 
     args, _ = parser.parse_known_args()
 

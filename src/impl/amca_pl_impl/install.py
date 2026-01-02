@@ -2,7 +2,7 @@ import impl.util.config.config as cf
 from pathlib import Path
 from InquirerPy import inquirer
 from impl.util import github  # your github.py
-from impl.util.dirparse import global_dir_parser as gdp
+from impl.util.globals import global_dir_parser as gdp
 
 
 def load():

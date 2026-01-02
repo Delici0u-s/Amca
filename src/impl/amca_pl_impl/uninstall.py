@@ -2,7 +2,7 @@ import argparse
 import shutil
 import impl.util.config.config as cf
 from pathlib import Path
-from impl.util.dirparse import global_dir_parser as gdp
+from impl.util.globals import global_dir_parser as gdp
 from InquirerPy import inquirer
 
 

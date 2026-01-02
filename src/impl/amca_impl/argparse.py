@@ -2,19 +2,10 @@ import sys
 import argparse as ap
 from pathlib import Path
 from textwrap import dedent
-from impl.util.dirparse import global_dir_parser as gdp
+from impl.util.globals import global_dir_parser as gdp
 import impl.util.config.config as cf
-from impl.amca_impl import execute, new, remove, args_cli
-
-
-def print_gen(Str: str):
-    def a(args, plugin_args_map):
-        # print("action:", Str)
-        # print("parsed args:", args)
-        # print("plugin args map:", plugin_args_map)
-        ...
-
-    return a
+from impl.amca_impl import new, remove, args_cli
+from impl.amca_impl.impl_execute import execute
 
 
 def normalize_plugin_opt_name(folder_name: str) -> str:
@@ -66,21 +57,21 @@ def build_main_parser(plugin_folders, enabled_plugins):
 
     subparsers.add_parser(
         "new", aliases=["n"], help="create new amca root directory"
-    ).set_defaults(func=print_gen("new"))
+    ).set_defaults(func=new.load)
 
     subparsers.add_parser(
         "remove", aliases=["r"], help="remove amca root directory"
-    ).set_defaults(func=print_gen("rem"))
+    ).set_defaults(func=remove.load)
 
     subparsers.add_parser(
         "args", aliases=["a"], help="cli interface for changing args"
-    ).set_defaults(func=print_gen("args"))
+    ).set_defaults(func=args_cli.load)
 
     subparsers.add_parser(
         "execute",
         aliases=["e"],
         help="execute amca plugin loading (default if no arg is present)",
-    ).set_defaults(func=print_gen("exec"))
+    ).set_defaults(func=execute.load)
 
     return parser
 
@@ -179,6 +170,7 @@ def eval_args():
         if cf.general_settings.get("debug"):
             print("No subcommand; parsed:", parsed)
             print("Plugin args:", plugin_args_map)
+        execute.load(parsed, plugin_args_map)
 
 
 if __name__ == "__main__":

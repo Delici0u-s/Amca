@@ -28,6 +28,9 @@ class _SettingsManager:
             s = Settings(str(general_config), auto_save=True, backend="json")
             s.default("extreamly_important.greet_user", True)
             s.default("debug", False)
+            s.default("amca_root.folder_name", ".Amca")
+            s.default("amca_root.recursive_search_depth", 5)
+            s.default("amca_root.ignored_paths", [])
             self._all_settings["general"] = s
 
         elif key == "plugins":

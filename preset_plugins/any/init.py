@@ -1,10 +1,11 @@
-from impl.plugin_base import Plugin, DirInfo, DirParser
+from impl.plugin_base import *
 
 
 class any(Plugin):
+
     def should_load(
         self,
-        amca_root_dir: DirInfo,
+        amca_root_dir: Optional[DirInfo],
         working_dir: DirInfo,
         dir_parser: DirParser,
     ) -> bool:
@@ -12,9 +13,15 @@ class any(Plugin):
 
     def load(
         self,
-        amca_root_dir: DirInfo,
+        amca_root_dir: Optional[DirInfo],
         working_dir: DirInfo,
         dir_parser: DirParser,
         args: list[str],
     ) -> None:
-        print("Any plugin loaded")
+        msg: str = "Any plugin loaded"
+        if len(args) > 0:
+            msg += " with args: "
+        for arg in args:
+            msg += f" '{arg}'"
+
+        print(msg)

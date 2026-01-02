@@ -1,21 +1,28 @@
-from impl.plugin_base import Plugin, DirInfo, DirParser
+from implementation.plugin_base import *
+import implementation.meson_implementation_i_guess as impl
 
 
 class meson(Plugin):
+
     def should_load(
         self,
-        amca_root_dir: DirInfo,
+        amca_root_dir: Optional[DirInfo],
         working_dir: DirInfo,
         dir_parser: DirParser,
     ) -> bool:
-        return "meson.build" in amca_root_dir.files
+
+        if amca_root_dir is None:
+            self.meson_root_info = working_dir
+        else:
+            self.meson_root_info = amca_root_dir
+
+        return "meson.build" in self.meson_root_info.files
 
     def load(
         self,
-        amca_root_dir: DirInfo,
+        amca_root_dir: Optional[DirInfo],
         working_dir: DirInfo,
         dir_parser: DirParser,
         args: list[str],
     ) -> None:
-        print("meson plugin loaded, with args ", args)
-        ...  # todo lmao
+        impl.run(self.meson_root_info, dir_parser, args)

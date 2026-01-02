@@ -30,6 +30,3 @@ class DirParser:
         info = DirInfo(key, files, folders)
         self.parsed_dirs[key] = info
         return info
-
-
-global_dir_parser = DirParser()

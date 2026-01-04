@@ -31,6 +31,7 @@ class _SettingsManager:
             s.default("amca_root.folder_name", ".Amca")
             s.default("amca_root.recursive_search_depth", 5)
             s.default("amca_root.ignored_paths", [])
+            s.default("default_file_editor", "nano")
             self._all_settings["general"] = s
 
         elif key == "plugins":

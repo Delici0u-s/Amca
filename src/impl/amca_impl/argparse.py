@@ -2,10 +2,10 @@ import sys
 import argparse as ap
 from pathlib import Path
 from textwrap import dedent
-from impl.util.globals import global_dir_parser as gdp
 import impl.util.config.config as cf
 from impl.amca_impl import new, remove, args_cli
 from impl.amca_impl.impl_execute import execute
+from impl.util.globals import global_dir_parser as gdp, amca_root_dir_info
 
 
 def normalize_plugin_opt_name(folder_name: str) -> str:
@@ -143,10 +143,31 @@ def eval_args():
     # Filter + warn for disabled plugins
     filtered_plugin_args = {}
 
+    arg_path = Path()
+    if amca_root_dir_info is not None:
+        amca_root_folder = amca_root_dir_info.path / cf.general_settings.get(
+            "amca_root.folder_name"
+        )
+        arg_path = amca_root_folder / "args"
+
     for plugin, args in plugin_args_map.items():
         norm = normalize_plugin_name(plugin)
 
         if norm in enabled_plugins:
+            if amca_root_dir_info is not None:
+
+                plugin_arg_file = arg_path / f"{plugin}.args"
+                if plugin_arg_file.exists():
+                    tf = []
+                    with plugin_arg_file.open("r", encoding="utf-8") as fh:
+                        for line in fh:
+                            line = line.strip()
+                            if not line or line.startswith("#"):
+                                continue
+                            tf.append(line)
+
+                    args = [*tf, *args]
+
             filtered_plugin_args[plugin] = args
         else:
             filtered_plugin_args[plugin] = []

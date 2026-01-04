@@ -1,3 +1,4 @@
+# yes, i know the api is shitty, i plan to rework this someday to be used like argparse
 import json
 import threading
 import tempfile

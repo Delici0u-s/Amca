@@ -19,6 +19,10 @@ def load():
     path_info = gdp.parse_dir(plugin_path)
     available_plugins = [str(p) for p in path_info.folders]
 
+    if not available_plugins:
+        print("No plugins installed!")
+        return
+
     # Get enabled plugins
     enabled_plugins = [str(p) for p in cf.plugin_settings.get("enabled_plugins") or []]
 

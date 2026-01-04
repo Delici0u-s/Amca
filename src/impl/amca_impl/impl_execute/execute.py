@@ -3,7 +3,7 @@ import impl.util.config.config as cf
 from pathlib import Path
 from impl.util.globals import global_dir_parser as gdp
 from impl.util.globals import glog
-from impl.util.path_helpers import amca_root_dir_info
+from impl.util.globals import amca_root_dir_info
 import os
 
 

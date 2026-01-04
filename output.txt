@@ -1,0 +1,2329 @@
+Contents of src:
+
+amca.py:
+
+import impl.amca_main as im
+import sys
+from pathlib import Path
+
+if __name__ == "__main__":
+    sys.argv[0] = str(Path(sys.executable).resolve())
+    sys.exit(im.main())
+
+
+
+
+
+
+amcapl.py:
+
+import impl.amcapl_main as im
+import sys
+from pathlib import Path
+
+if __name__ == "__main__":
+    sys.argv[0] = str(Path(sys.executable).resolve())
+    sys.exit(im.main())
+
+
+
+
+
+
+plugin/plugin_base.py:
+
+import abc
+from plugin.dirparse import DirInfo, DirParser
+from typing import Optional, override
+
+
+class Plugin(abc.ABC):
+    def __init__(self, plugin_root_dir: DirInfo, dir_parser: DirParser):
+        pass
+
+    @abc.abstractmethod
+    def should_load(
+        self,
+        amca_root_dir: Optional[DirInfo],
+        working_dir: DirInfo,
+        dir_parser: DirParser,
+    ) -> bool: ...
+
+    @abc.abstractmethod
+    def load(
+        self,
+        amca_root_dir: Optional[DirInfo],
+        working_dir: DirInfo,
+        dir_parser: DirParser,
+        args: list[str],
+    ) -> None: ...
+
+
+
+
+
+
+plugin/dirparse.py:
+
+from pathlib import Path
+
+
+class DirInfo:
+    def __init__(self, path: Path, files: set[str], folders: set[str]) -> None:
+        self.path = path
+        self.files = files
+        self.folders = folders
+
+
+class DirParser:
+    def __init__(self) -> None:
+        self.parsed_dirs: dict[Path, DirInfo] = {}
+
+    def parse_dir(self, path: Path) -> DirInfo:
+        key = path.resolve(strict=False)
+
+        if key in self.parsed_dirs:
+            return self.parsed_dirs[key]
+
+        files: set[str] = set()
+        folders: set[str] = set()
+
+        for entry in key.iterdir():
+            if entry.is_file():
+                files.add(entry.name)
+            elif entry.is_dir():
+                folders.add(entry.name)
+
+        info = DirInfo(key, files, folders)
+        self.parsed_dirs[key] = info
+        return info
+
+
+
+
+
+
+impl/amca_main.py:
+
+import os, sys
+from impl.util.globals import global_dir_parser as gdp
+from pathlib import Path
+import impl.util.config.config as cf
+import impl.amca_impl.argparse as argp
+
+
+def main():
+    # cf.ensure_config_structure()
+    if cf.general_settings.get("extreamly_important.greet_user"):
+        print("Hello Master")
+
+    argp.eval_args()
+
+    # p = GDP.parse_dir(Path(sys.argv[1]).parent)
+    # print(p.path)
+    # print(p.files)
+    # print(p.folders)
+
+
+
+
+
+
+impl/amcapl_main.py:
+
+import os, sys
+from impl.util.globals import global_dir_parser as gdp
+from pathlib import Path
+import impl.util.config.config as cf
+import impl.amca_pl_impl.argparse as argparse
+
+
+def main():
+    # cf.ensure_config_structure()
+
+    if cf.general_settings.get("extreamly_important.greet_user"):
+        print("Hello Master")
+
+    argparse.eval_args()
+
+
+
+
+
+
+impl/util/settings.py:
+
+# yes, i know the api is shitty, i plan to rework this someday to be used like argparse
+import json
+import threading
+import tempfile
+import shutil
+from pathlib import Path
+from typing import Any, Dict, Optional, Union, Callable
+import logging
+import traceback
+import datetime
+
+try:
+    import yaml
+
+    YAML_AVAILABLE = True
+except ImportError:
+    YAML_AVAILABLE = False
+
+import pickle
+
+
+class SettingsError(Exception):
+    """Custom exception for configuration errors."""
+
+    pass
+
+
+backends = ("json", "yaml", "pickle")
+
+
+class Settings:
+    """
+    A thread-safe settings manager with JSON, YAML, or Pickle backend.
+
+    New init options:
+      - on_error: "raise" | "warn" | "defaults"
+          * "raise"   -> raise SettingsError on load/save problems (original strict behavior)
+          * "warn"    -> log a warning, fall back to defaults (useful for production)
+          * "defaults"-> silently fall back to defaults (quiet)
+      - backup_bad_file: bool
+          If True and a config file is corrupt it will be moved to a timestamped .corrupt.* backup.
+      - error_handler: Optional[Callable[[Exception, str], None]]
+          Optional callback called as error_handler(exception, context) where context is "load" or "save".
+      - show_traceback: bool
+          If True the full traceback will be logged when errors happen (helpful while debugging).
+    """
+
+    def __init__(
+        self,
+        path: Union[str, Path],
+        defaults: Optional[Dict[str, Any]] = None,
+        auto_save: bool = False,
+        backend: str = ("json", "yaml", "pickle")[0],
+        on_error: str = "warn",
+        backup_bad_file: bool = True,
+        error_handler: Optional[Callable[[Exception, str], None]] = None,
+        show_traceback: bool = False,
+    ) -> None:
+        self._path = Path(path)
+        self._defaults = defaults or {}
+        self._values: Dict[str, Any] = {}
+        self._lock = threading.RLock()
+        self._auto_save = auto_save
+        self._backend = backend.lower()
+        self._on_error = on_error  # "raise", "warn", "defaults"
+        self._backup_bad_file = bool(backup_bad_file)
+        self._error_handler = error_handler
+        self._show_traceback = bool(show_traceback)
+
+        if self._backend == "yaml" and not YAML_AVAILABLE:
+            raise SettingsError("YAML backend requested but PyYAML not installed.")
+        if self._backend == "pickle" and not hasattr(pickle, "dump"):
+            raise SettingsError("Pickle backend unavailable.")
+        if self._backend not in backends:
+            raise SettingsError("Settings backend unavailable")
+
+        # configure a logger for warnings/errors
+        self._logger = logging.getLogger(self.__class__.__name__)
+        if not self._logger.handlers:
+            # avoid adding multiple handlers in interactive sessions
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+            self._logger.addHandler(handler)
+        self._logger.setLevel(logging.INFO)
+
+        # attempt load, but handle errors according to on_error
+        self.load()
+
+    def __enter__(self) -> "Settings":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        # Save only if no exception and auto_save disabled
+        if exc_type is None and not self._auto_save:
+            self.save()
+
+    def _handle_error(self, exc: Exception, context: str) -> None:
+        """
+        Centralized error handling. context is "load" or "save".
+        """
+        # call user-supplied handler first
+        try:
+            if self._error_handler:
+                try:
+                    self._error_handler(exc, context)
+                except Exception as eh:
+                    # user handler shouldn't break us
+                    self._logger.warning("error_handler raised: %s", eh)
+        except Exception:
+            # swallow any exceptions from error_handler
+            pass
+
+        # log with optional traceback
+        if self._show_traceback:
+            tb = traceback.format_exc()
+            self._logger.error("Exception during %s: %s\n%s", context, exc, tb)
+        else:
+            self._logger.error("Exception during %s: %s", context, exc)
+
+        # react depending on policy
+        if self._on_error == "raise":
+            raise SettingsError(f"Error during {context}: {exc}") from exc
+        # "warn" and "defaults" both fall through to non-raising behavior
+
+    def load(self) -> None:
+        """
+        Load configuration from file, merging with defaults.
+        On parse/read errors the behavior depends on self._on_error.
+        """
+        with self._lock:
+            if not self._path.exists():
+                # Initialize with defaults
+                self._values = self._deepcopy(self._defaults)
+                return
+
+            try:
+                data = self._read_file()
+                if not isinstance(data, dict):
+                    raise SettingsError("Configuration root must be a mapping.")
+                self._values = self._merge(dict(self._defaults), data)
+            except Exception as e:
+                # Attempt to back up the bad file if configured
+                try:
+                    if self._backup_bad_file and self._path.exists():
+                        timestamp = datetime.datetime.utcnow().strftime(
+                            "%Y%m%dT%H%M%SZ"
+                        )
+                        bad_name = self._path.with_suffix(
+                            self._path.suffix + f".corrupt.{timestamp}.bak"
+                        )
+                        try:
+                            shutil.move(str(self._path), str(bad_name))
+                            self._logger.info(
+                                "Backed up corrupt config to %s", bad_name
+                            )
+                        except Exception as be:
+                            self._logger.warning(
+                                "Failed to back up corrupt config: %s", be
+                            )
+                except Exception:
+                    # ensure backup attempts don't mask original error handling
+                    pass
+
+                # call centralized error handling
+                self._handle_error(e, "load")
+
+                # if policy is "defaults" or "warn", fall back to defaults instead of aborting
+                if self._on_error in ("warn", "defaults"):
+                    self._values = self._deepcopy(self._defaults)
+                    return
+
+    def save(self) -> None:
+        """
+        Persist current settings to disk atomically, creating parent directories as needed.
+        """
+        with self._lock:
+            # Ensure parent directory exists
+            try:
+                self._path.parent.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                self._handle_error(e, "save")
+                if self._on_error == "raise":
+                    return
+                # if not raising, proceed no further
+                return
+
+            raw = self._values
+            # Write to temporary file in same directory and move into place
+            mode = "wb" if self._backend == "pickle" else "w"
+            temp = None
+            try:
+                temp = tempfile.NamedTemporaryFile(
+                    mode=mode, delete=False, dir=str(self._path.parent)
+                )
+                try:
+                    self._dump_file(raw, temp)
+                finally:
+                    # ensure file is flushed and closed so move on Windows will succeed
+                    try:
+                        temp.flush()
+                    except Exception:
+                        pass
+                    try:
+                        temp.close()
+                    except Exception:
+                        pass
+                shutil.move(temp.name, str(self._path))
+            except Exception as e:
+                # cleanup temp file if present
+                try:
+                    if temp is not None:
+                        Path(temp.name).unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+                self._handle_error(e, "save")
+                # if policy=="raise", _handle_error already raised; otherwise just return
+                return
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """
+        Retrieve a setting by dotted key, falling back to provided default or defaults.
+        """
+        with self._lock:
+            parts = key.split(".")
+            node = self._values
+            for part in parts:
+                if isinstance(node, dict) and part in node:
+                    node = node[part]
+                else:
+                    return default
+            return node
+
+    def set(self, key: str, value: Any) -> None:
+        """
+        Set a setting by dotted key, creating nested structure as needed.
+        """
+        with self._lock:
+            parts = key.split(".")
+            node = self._values
+            for part in parts[:-1]:
+                if part not in node or not isinstance(node[part], dict):
+                    node[part] = {}
+                node = node[part]
+            node[parts[-1]] = value
+            if self._auto_save:
+                # let save handle its own errors according to policy
+                self.save()
+
+    def default(self, key: str, value: Any) -> bool:
+        """
+        Set the value only if key is not already present. Returns True if set.
+        """
+        with self._lock:
+            parts = key.split(".")
+            node = self._values
+            for part in parts[:-1]:
+                if part not in node or not isinstance(node[part], dict):
+                    node[part] = {}
+                node = node[part]
+            leaf = parts[-1]
+            if leaf not in node:
+                node[leaf] = value
+                if self._auto_save:
+                    self.save()
+                return True
+            return False
+
+    def update(self, data: Dict[str, Any]) -> None:
+        """
+        Bulk-update settings via dict merge.
+        """
+        with self._lock:
+            self._values = self._merge(self._values, data)
+            if self._auto_save:
+                self.save()
+
+    def reset(self) -> None:
+        """
+        Reset settings to defaults (in-memory only).
+        """
+        with self._lock:
+            self._values = self._deepcopy(self._defaults)
+            if self._auto_save:
+                self.save()
+
+    def as_dict(self) -> Dict[str, Any]:
+        """
+        Export a deep copy of current settings.
+        """
+        with self._lock:
+            return self._deepcopy(self._values)
+
+    def _read_file(self) -> Any:
+        """
+        Read raw data from disk according to backend.
+        """
+        if self._backend == "pickle":
+            with self._path.open("rb") as f:
+                return pickle.load(f)
+        text = self._path.read_text(encoding="utf-8")
+        if not text:
+            return {}
+        if self._backend == "json":
+            return json.loads(text)
+        else:
+            return yaml.safe_load(text)
+
+    def _dump_file(self, data: Any, stream) -> None:
+        """
+        Dump raw data to stream according to backend.
+        """
+        if self._backend == "pickle":
+            # Use highest protocol for speed and efficiency
+            pickle.dump(data, stream, protocol=pickle.HIGHEST_PROTOCOL)
+        elif self._backend == "json":
+            # stream is a text file handle
+            json.dump(data, stream, indent=2, ensure_ascii=False)
+        else:
+            yaml.safe_dump(data, stream)
+
+    @staticmethod
+    def _merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Recursively merge dict b into a.
+        """
+        for key, val in b.items():
+            if key in a and isinstance(a[key], dict) and isinstance(val, dict):
+                a[key] = Settings._merge(a[key], val)
+            else:
+                a[key] = val
+        return a
+
+    @staticmethod
+    def _deepcopy(obj: Any) -> Any:
+        """
+        Perform a deep copy of nested dicts/lists.
+        """
+        if isinstance(obj, dict):
+            return {k: Settings._deepcopy(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [Settings._deepcopy(v) for v in obj]
+        else:
+            return obj
+
+
+if __name__ == "__main__":
+    # fixed the string quoting here (was previously invalid)
+    s: Settings = Settings(
+        Path(__file__).parent / "settings_test" / "settings.json",
+        backend="json",
+        on_error="warn",  # 'raise'|'warn'|'defaults'
+        backup_bad_file=True,
+        show_traceback=True,
+    )
+    s.load()
+    s.default(
+        "Last_Session.Input", "No previous input"
+    )  # if omitted s.get would return None
+    print("Previous input:", s.get("Last_Session.Input"))
+    s.set("Last_Session.Input", input("Next output:    "))
+    s.save()
+
+
+
+
+
+
+impl/util/input.py:
+
+# Source - https://stackoverflow.com/a
+# Posted by fmark, modified by community. See post 'Timeline' for change history
+# Retrieved 2026-01-02, License - CC BY-SA 4.0
+
+import sys
+
+
+def query_yes_no(question, default="yes"):
+    """Ask a yes/no question via raw_input() and return their answer.
+
+    "question" is a string that is presented to the user.
+    "default" is the presumed answer if the user just hits <Enter>.
+            It must be "yes" (the default), "no" or None (meaning
+            an answer is required of the user).
+
+    The "answer" return value is True for "yes" or False for "no".
+    """
+    valid = {"yes": True, "y": True, "ye": True, "no": False, "n": False}
+    if default is None:
+        prompt = " [y/n] "
+    elif default == "yes":
+        prompt = " [Y/n] "
+    elif default == "no":
+        prompt = " [y/N] "
+    else:
+        raise ValueError("invalid default answer: '%s'" % default)
+
+    while True:
+        sys.stdout.write(question + prompt)
+        choice = input().lower()
+        if default is not None and choice == "":
+            return valid[default]
+        elif choice in valid:
+            return valid[choice]
+        else:
+            sys.stdout.write("Please respond with 'yes' or 'no' " "(or 'y' or 'n').\n")
+
+
+
+
+
+
+impl/util/globals.py:
+
+import impl.util.logger as logger
+import sys
+from pathlib import Path
+from impl.util.dirparse import DirParser
+
+root_dir = Path(sys.argv[0]).parent
+
+glog: logger.Logger = logger.Logger(root_dir / "amca_log.log")
+
+global_dir_parser = DirParser()
+
+from impl.util.path_helpers import _find_amca_root_dir
+
+amca_root_dir_info = _find_amca_root_dir()
+
+
+
+
+
+
+impl/util/github.py:
+
+import requests
+import os
+
+
+def gen_github_api_link(owner, repo, branch="main", path=""):
+    """
+    Generate a GitHub API URL to get the contents of a repository, branch, or folder.
+
+    Parameters:
+        owner (str): GitHub username or organization.
+        repo (str): Repository name.
+        branch (str): Branch name (default: 'main').
+        path (str): Path inside the repo (folder or file, default: root).
+
+    Returns:
+        str: GitHub API URL to access the contents.
+    """
+    path = path.strip("/")  # remove leading/trailing slashes
+    if path:
+        url = (
+            f"https://api.github.com/repos/{owner}/{repo}/contents/{path}?ref={branch}"
+        )
+    else:
+        url = f"https://api.github.com/repos/{owner}/{repo}/contents/?ref={branch}"
+    return url
+
+
+def list_github_contents(owner=None, repo=None, branch="main", path="", api_url=None):
+    """
+    List the contents (files and folders) of a GitHub repo/folder.
+
+    Can either provide owner/repo/branch/path or a full api_url.
+
+    Returns:
+        List of dicts with 'name' and 'type' keys.
+    """
+    url = api_url or gen_github_api_link(owner, repo, branch, path)
+    response = requests.get(url)
+    response.raise_for_status()
+    data = response.json()
+
+    contents = [{"name": item["name"], "type": item["type"]} for item in data]
+    return contents
+
+
+def download_github_folder(
+    owner=None, repo=None, branch="main", path="", local_dir="", api_url=None
+):
+    """
+    Download a folder from a GitHub repo recursively.
+
+    Can either provide owner/repo/branch/path or a full api_url.
+    """
+    url = api_url or gen_github_api_link(owner, repo, branch, path)
+    response = requests.get(url)
+    response.raise_for_status()
+    items = response.json()
+
+    if not local_dir:
+        local_dir = path or "root"
+    os.makedirs(local_dir, exist_ok=True)
+
+    for item in items:
+        item_name = item["name"]
+        item_type = item["type"]
+        item_path = os.path.join(local_dir, item_name)
+
+        if item_type == "dir":
+            sub_api_url = item.get("url")  # GitHub API url for subfolder
+            download_github_folder(api_url=sub_api_url, local_dir=item_path)
+        elif item_type == "file":
+            file_url = item["download_url"]
+            file_data = requests.get(file_url).content
+            with open(item_path, "wb") as f:
+                f.write(file_data)
+            print(f"Downloaded {item_path}")
+
+
+def download_github_file(
+    owner=None, repo=None, branch="main", file_path="", local_file="", api_url=None
+):
+    """
+    Download a single file from GitHub.
+
+    Can either provide owner/repo/branch/file_path or a full api_url.
+    """
+    url = api_url or gen_github_api_link(owner, repo, branch, file_path)
+    response = requests.get(url)
+    response.raise_for_status()
+    data = response.json()
+
+    if data["type"] != "file":
+        raise ValueError(f"{file_path} is not a file.")
+
+    file_data = requests.get(data["download_url"]).content
+    if not local_file:
+        local_file = os.path.basename(file_path)
+    os.makedirs(os.path.dirname(local_file) or ".", exist_ok=True)
+    with open(local_file, "wb") as f:
+        f.write(file_data)
+    print(f"Downloaded {local_file}")
+
+
+if __name__ == "__main__":
+    owner = "Delici0u-s"
+    repo = "Amca"
+    branch = "rewrite"
+    folder = "preset_plugins"
+
+    print("Listing contents:")
+    contents = list_github_contents(owner, repo, branch, folder)
+    for item in contents:
+        print(item)
+
+    # Example: download a folder recursively
+    download_github_folder(owner, repo, branch, folder, "local_preset_plugins")
+
+    # Example: download a single file
+    # download_github_file(owner, repo, branch, "preset_plugins/somefile.py", "somefile.py")
+
+    # Example: using a full API path
+    api_url = "https://api.github.com/repos/Delici0u-s/Amca/contents/preset_plugins?ref=rewrite"
+    download_github_folder(api_url=api_url, local_dir="local_preset_plugins_api_url")
+
+
+
+
+
+
+impl/util/counter.py:
+
+class Counter:
+    def __init__(self):
+        self.__value: int = -1
+
+    def get(self) -> int:
+        self.__value += 1
+        return self.__value
+
+    def get_total(self) -> int:
+        return self.__value
+
+    def set(self, value: int) -> None:
+        self.__value = value
+
+
+GCounter: Counter = Counter()
+
+
+
+
+
+
+impl/util/logger.py:
+
+from pathlib import Path
+import sys, os, time
+from typing import Optional
+
+
+def supports_color() -> bool:
+    return sys.stdout.isatty() and os.environ.get("TERM", "") not in ("dumb", "")
+
+
+class Logger:
+    """
+    Lightweight cross-platform logger with flexible output control:
+      - Levels: INFO, SUCCESS, WARN, ERROR, FATAL
+      - warnings_to_stdio_too: True -> warnings to stdout, False -> warnings to stderr
+      - log_prefix_level: "None", "minimal", "simple", "normal", "verbose"
+      - Modes: console, file, both, silent
+    """
+
+    _PREFIX_LEVELS = {"None": 0, "minimal": 1, "simple": 2, "normal": 3, "verbose": 4}
+
+    _TAGS = {
+        "INFO": "[INFO]",
+        "SUCCESS": "[SUCCESS]",
+        "WARN": "[WARN]",
+        "ERROR": "[ERROR]",
+        "FATAL": "[FATAL]",
+    }
+
+    _LEVEL_PRIORITY = {
+        "INFO": 1,
+        "SUCCESS": 2,
+        "WARN": 3,
+        "ERROR": 4,
+        "FATAL": 5,
+    }
+
+    def __init__(
+        self,
+        log_path: Optional[str | Path] = None,
+        warnings_to_stdio_too: bool = True,
+        log_prefix_level: str = "normal",
+        console_enabled: bool = True,
+        file_enabled: bool = True,
+        min_log_level: str = "INFO",
+    ) -> None:
+        self.warnings_to_stdio_too = warnings_to_stdio_too
+        self.prefix_level = self._PREFIX_LEVELS.get(log_prefix_level, 2)
+        self.logger_name = Path(sys.argv[0]).stem or "main"
+
+        # Output control
+        self.console_enabled = console_enabled
+        self.file_enabled = file_enabled
+        self.min_level = min_log_level
+
+        # File logging setup (lazy open)
+        self.log_file = None
+        if log_path and self.file_enabled:
+            p = Path(log_path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            self.log_file = open(p, "a", encoding="utf-8", buffering=1)
+
+        # Color support
+        self._use_color = supports_color()
+        self._colors = {
+            "INFO": "",
+            "SUCCESS": "\033[32m" if self._use_color else "",
+            "WARN": "\033[33m" if self._use_color else "",
+            "ERROR": "\033[31m" if self._use_color else "",
+            "FATAL": "\033[1;31m" if self._use_color else "",
+        }
+        self._reset = "\033[0m" if self._use_color else ""
+
+        # Fast references
+        self._stdout_write = sys.stdout.write
+        self._stderr_write = sys.stderr.write
+
+    # Timestamp helpers
+    @staticmethod
+    def _ts_normal() -> str:
+        return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    @staticmethod
+    def _ts_simple() -> str:
+        return time.strftime("%H:%M:%SZ", time.gmtime())
+
+    def _format(self, level: str, msg: Optional[str]) -> tuple[str, str]:
+        message = "" if msg is None else str(msg)
+        tag = self._TAGS[level]
+        col_tag = f"{self._colors[level]}{tag}{self._reset}"
+
+        if self.prefix_level == 0:  # None
+            return f"{message}\n", f"{message}\n"
+        elif self.prefix_level == 1:  # minimal
+            prefix_col, prefix_plain = col_tag, tag
+        elif self.prefix_level == 2:  # simple
+            ts = self._ts_simple()
+            prefix_col, prefix_plain = f"{ts} {col_tag}", f"{ts} {tag}"
+        elif self.prefix_level == 3:  # normal
+            ts = self._ts_normal()
+            prefix_col, prefix_plain = f"{ts} {col_tag}", f"{ts} {tag}"
+        else:  # verbose
+            ts = self._ts_normal()
+            ctx = f"(logger={self.logger_name} pid={os.getpid()})"
+            prefix_col, prefix_plain = f"{ts} {col_tag} {ctx}", f"{ts} {tag} {ctx}"
+
+        if message:
+            return f"{prefix_col} {message}\n", f"{prefix_plain} {message}\n"
+        return f"{prefix_col}\n", f"{prefix_plain}\n"
+
+    def _write(self, stream_write, colored: str, plain: str, level: str):
+        # Skip messages below min_level
+        if self._LEVEL_PRIORITY[level] < self._LEVEL_PRIORITY[self.min_level]:
+            return
+        # Skip entirely if silent
+        if not self.console_enabled and not self.file_enabled:
+            return
+        if self.console_enabled:
+            stream_write(colored)
+        if self.file_enabled and self.log_file:
+            try:
+                self.log_file.write(plain)
+            except Exception:
+                pass
+
+    # Public API
+    def log(self, msg: Optional[str] = None) -> None:
+        if not (self.console_enabled or self.file_enabled):
+            return
+        c, p = self._format("INFO", msg)
+        self._write(self._stdout_write, c, p, "INFO")
+
+    def success(self, msg: Optional[str] = None) -> None:
+        if not (self.console_enabled or self.file_enabled):
+            return
+        c, p = self._format("SUCCESS", msg)
+        self._write(self._stdout_write, c, p, "SUCCESS")
+
+    def warn(self, msg: Optional[str] = None) -> None:
+        if not (self.console_enabled or self.file_enabled):
+            return
+        c, p = self._format("WARN", msg)
+        if self.warnings_to_stdio_too and self.console_enabled:
+            self._write(self._stdout_write, c, p, "WARN")
+        else:
+            self._write(self._stderr_write, c, p, "WARN")
+
+    def error(self, msg: Optional[str] = None) -> None:
+        if not (self.console_enabled or self.file_enabled):
+            return
+        c, p = self._format("ERROR", msg)
+        self._write(self._stderr_write, c, p, "ERROR")
+
+    def ERROR(self, msg: Optional[str] = None, code: int = 1) -> None:
+        if not (self.console_enabled or self.file_enabled):
+            raise SystemExit(code)
+        c, p = self._format("FATAL", msg)
+        self._write(self._stderr_write, c, p, "FATAL")
+        try:
+            sys.stdout.flush()
+            sys.stderr.flush()
+            if self.log_file:
+                self.log_file.flush()
+                self.log_file.close()
+        finally:
+            raise SystemExit(code)
+
+    # Mode control API
+    def set_mode(self, mode: str = ["console", "file", "both", "silent"][2]):
+        mode = mode.lower()
+        if mode == "console":
+            self.console_enabled, self.file_enabled = True, False
+        elif mode == "file":
+            self.console_enabled, self.file_enabled = False, True
+        elif mode == "both":
+            self.console_enabled, self.file_enabled = True, True
+        elif mode == "silent":
+            self.console_enabled, self.file_enabled = False, False
+
+    def enable_console(self):
+        self.console_enabled = True
+
+    def disable_console(self):
+        self.console_enabled = False
+
+    def enable_file(self):
+        self.file_enabled = True
+
+    def disable_file(self):
+        self.file_enabled = False
+
+    def disable_all(self):
+        self.console_enabled = False
+        self.file_enabled = False
+
+    def set_min_level(self, level: str):
+        if level not in self._TAGS:
+            raise ValueError(f"Unknown log level: {level}")
+        self.min_level = level
+
+    def __del__(self):
+        if self.log_file:
+            try:
+                self.log_file.close()
+            except Exception:
+                pass
+
+
+if __name__ == "__main__":
+    log = Logger(log_path="app.log")
+    log.log("Starting service")
+    log.success("Service started successfully")
+    log.set_mode("file")
+    log.warn("Low memory warning (file only)")
+    log.set_mode("console")
+    log.error("Connection failed (console only)")
+    log.set_mode("silent")
+    log.log("This will not appear anywhere")
+    log.set_mode("both")
+    log.ERROR("Fatal crash", 2)
+
+
+
+
+
+
+impl/util/dirparse.py:
+
+from pathlib import Path
+
+
+class DirInfo:
+    def __init__(self, path: Path, files: set[str], folders: set[str]) -> None:
+        self.path = path
+        self.files = files
+        self.folders = folders
+
+
+class DirParser:
+    def __init__(self) -> None:
+        self.parsed_dirs: dict[Path, DirInfo] = {}
+
+    def parse_dir(self, path: Path) -> DirInfo:
+        key = path.resolve(strict=False)
+
+        if key in self.parsed_dirs:
+            return self.parsed_dirs[key]
+
+        files: set[str] = set()
+        folders: set[str] = set()
+
+        for entry in key.iterdir():
+            if entry.is_file():
+                files.add(entry.name)
+            elif entry.is_dir():
+                folders.add(entry.name)
+
+        info = DirInfo(key, files, folders)
+        self.parsed_dirs[key] = info
+        return info
+
+
+
+
+
+
+impl/util/path_helpers.py:
+
+from typing import Optional
+import impl.util.config.config as cf
+from pathlib import Path
+from impl.util.globals import global_dir_parser as gdp
+from impl.util.dirparse import DirInfo
+import os, sys
+from impl.amca_impl.new import create_amca_root
+from impl.util.input import query_yes_no
+
+
+def _find_amca_root_dir() -> Optional[DirInfo]:
+    ori_seach_path = Path(os.getcwd()).resolve()
+    seach_path = ori_seach_path
+
+    root_folder_name = str(cf.general_settings.get("amca_root.folder_name"))
+    if root_folder_name.count("/") + root_folder_name.count("\\") != 0:
+        print(
+            f"Ensure amca_root.folder_name in {Path(sys.argv[0]).parent} is a single folders name, not a path"
+        )
+        sys.exit(1)
+
+    return_val = None
+    for _ in range(cf.general_settings.get("amca_root.recursive_search_depth")):
+        dir_info = gdp.parse_dir(seach_path)
+        if root_folder_name in dir_info.folders:
+            return_val = dir_info
+            break
+        if seach_path == seach_path.parent:
+            break
+        seach_path = seach_path.parent
+
+    ignored_root_paths: list[str] = cf.general_settings.get("amca_root.ignored_paths")
+    if str(ori_seach_path) not in ignored_root_paths and return_val is None:
+        if query_yes_no(
+            "No amca root was found, would you like to create one in this directory?"
+        ):
+            create_amca_root(ori_seach_path / root_folder_name)
+            return_val = gdp.parse_dir(ori_seach_path)
+        else:
+            ignored_root_paths.append(str(ori_seach_path))
+            cf.general_settings.set("amca_root.ignored_paths", ignored_root_paths)
+
+    return return_val
+
+
+
+
+
+
+impl/util/config/config.py:
+
+from impl.util.github import gen_github_api_link
+from impl.util.settings import Settings
+import sys
+from pathlib import Path
+
+
+class _SettingsManager:
+    def __init__(self):
+        self._all_settings: dict[str, Settings] = {}
+
+    def get(self, key: str) -> Settings:
+        """Lazy-load and return a setting by key"""
+        if key not in self._all_settings:
+            self._load(key)
+        return self._all_settings[key]
+
+    def __getitem__(self, key: str) -> Settings:
+        """Allow dictionary-style access: settings_manager['general']"""
+        return self.get(key)
+
+    def _load(self, key: str):
+        root_path = Path(sys.argv[0]).parent.parent.resolve()
+        config_path = root_path / "config"
+        config_path.mkdir(exist_ok=True)
+
+        if key == "general":
+            general_config = config_path / "general_conf.json"
+            s = Settings(str(general_config), auto_save=True, backend="json")
+            s.default("extreamly_important.greet_user", True)
+            s.default("debug", False)
+            s.default("amca_root.folder_name", ".Amca")
+            s.default("amca_root.recursive_search_depth", 5)
+            s.default("amca_root.ignored_paths", [])
+            s.default("default_file_editor", "nano")
+            self._all_settings["general"] = s
+
+        elif key == "plugins":
+            plugin_path = config_path / "plugins"
+            plugin_path.mkdir(exist_ok=True)
+            plugin_conf = plugin_path / "plugin_conf.json"
+            installed_plugins = plugin_path / "installed_plugins"
+            installed_plugins.mkdir(exist_ok=True)
+            s = Settings(str(plugin_conf), auto_save=True, backend="json")
+            s.default("generic.exit_on_plugin_error", False)
+            s.default("generic.exit_on_plugin_not_found", False)
+            s.default("generic.plugin_path", str(installed_plugins))
+            s.default("enabled_plugins", [])
+            s.default("logging.warn_if_plugin_not_found", True)
+            s.default("logging.warn_if_plugin_arg_not_enabled", True)
+            s.default("logging.print_loaded", True)
+            s.default(
+                "plugin_sources",
+                [
+                    gen_github_api_link(
+                        "Delici0u-s", "Amca", "rewrite", "preset_plugins"
+                    )
+                ],
+            )
+            self._all_settings["plugins"] = s
+
+
+_settings_manager = _SettingsManager()
+
+general_settings = _settings_manager.get("general")
+plugin_settings = _settings_manager["plugins"]
+
+
+
+
+
+
+impl/amca_pl_impl/enable.py:
+
+import impl.util.config.config as cf
+from pathlib import Path
+from impl.util.globals import global_dir_parser as gdp
+from InquirerPy import inquirer
+
+
+def load():
+    # Load plugin path
+    try:
+        plugin_path = Path(cf.plugin_settings.get("generic.plugin_path"))
+    except Exception:
+        print(f"Provided plugin_path in {cf.plugin_settings._path} is not valid")
+        return
+
+    if not plugin_path.exists():
+        print("Plugin path is not available, please ensure the path is valid")
+        return
+
+    path_info = gdp.parse_dir(plugin_path)
+    available_plugins = [str(p) for p in path_info.folders]
+
+    # Get enabled plugins
+    enabled_plugins = [str(p) for p in cf.plugin_settings.get("enabled_plugins") or []]
+
+    # Remove already enabled plugins from available list
+    available_plugins = [p for p in available_plugins if p not in enabled_plugins]
+
+    if not available_plugins:
+        print("All plugins are already enabled!")
+        return
+
+    print("\ndisabled Plugins:")
+    # Interactive selection loop
+    while True:
+        choice = inquirer.select(
+            message="Pick a plugin to enable (or exit selection):",
+            choices=[*available_plugins, "Exit selection"],
+        ).execute()
+
+        if choice == "Exit selection":
+            break
+
+        # Update enabled and available lists
+        enabled_plugins.append(choice)
+        available_plugins.remove(choice)
+
+        # print(f"Enabled plugins: {enabled_plugins}")
+        if not available_plugins:
+            print("No more plugins to enable.")
+            break
+
+    # Optionally, save enabled_plugins back to config
+    cf.plugin_settings.set("enabled_plugins", enabled_plugins)
+
+
+
+
+
+
+impl/amca_pl_impl/uninstall.py:
+
+import argparse
+import shutil
+import impl.util.config.config as cf
+from pathlib import Path
+from impl.util.globals import global_dir_parser as gdp
+from InquirerPy import inquirer
+
+
+def load():
+    # Argument parsing
+    parser = argparse.ArgumentParser(
+        description="Used to permanently remove plugins from the system"
+    )
+    parser.add_argument(
+        "-y", "--yes", action="store_true", help="Automatically answer yes to prompts"
+    )
+    parsed = parser.parse_args()
+
+    # Load plugin path
+    try:
+        plugin_path = Path(cf.plugin_settings.get("generic.plugin_path"))
+    except Exception:
+        print(f"Provided plugin_path in {cf.plugin_settings._path} is not valid")
+        return
+
+    if not plugin_path.exists():
+        print("Plugin path is not available, please ensure the path is valid")
+        return
+
+    path_info = gdp.parse_dir(plugin_path)
+    all_plugins = [str(p) for p in path_info.folders]
+
+    if not all_plugins:
+        print("No plugins available in the plugin path!")
+        return
+
+    # Get currently enabled plugins
+    enabled_plugins = [str(p) for p in cf.plugin_settings.get("enabled_plugins") or []]
+
+    while True:
+        # Display all plugins
+        choices = [
+            f"{p} {'(enabled)' if p in enabled_plugins else ''}" for p in all_plugins
+        ]
+        choices.append("Exit selection")
+
+        choice = inquirer.select(
+            message="Pick a plugin to uninstall:",
+            choices=choices,
+        ).execute()
+
+        if choice == "Exit selection":
+            break
+
+        plugin_name = choice.split()[0]  # Extract folder name
+
+        # Confirm uninstall unless -y is passed
+        if not parsed.yes:
+            confirm = inquirer.confirm(
+                message=f"Are you sure you want to uninstall '{plugin_name}'? This cannot be undone."
+            ).execute()
+            if not confirm:
+                continue
+
+        plugin_folder = plugin_path / plugin_name
+
+        if plugin_folder.exists():
+            try:
+                shutil.rmtree(plugin_folder)
+                print(f"Plugin '{plugin_name}' has been uninstalled.")
+            except Exception as e:
+                print(f"Failed to remove plugin '{plugin_name}': {e}")
+        else:
+            print(f"Plugin '{plugin_name}' folder does not exist, skipping.")
+
+        # Remove from enabled list if present
+        if plugin_name in enabled_plugins:
+            enabled_plugins.remove(plugin_name)
+            cf.plugin_settings.set("enabled_plugins", enabled_plugins)
+            cf.plugin_settings.save()
+
+        # Update all_plugins list for next iteration
+        all_plugins = [p for p in all_plugins if p != plugin_name]
+
+        if not all_plugins:
+            print("All plugins have been uninstalled!")
+            break
+
+    print("Plugin uninstall process complete!")
+
+
+
+
+
+
+impl/amca_pl_impl/call.py:
+
+import sys
+
+
+def load():
+    # TODO
+    # call specific plugins
+
+    print("To be implemented")
+
+
+
+
+
+
+impl/amca_pl_impl/argparse.py:
+
+import argparse as ap
+from impl.amca_pl_impl import (
+    enable,
+    disable,
+    install,
+    uninstall,
+    call,
+    toggle,
+    list as lip,
+)
+import sys
+
+
+def eval_args():
+    parser = ap.ArgumentParser(
+        prog="amcapl",
+        description="Handles plugin management for AMCA",
+        epilog="Amcapl Version 0.1",
+    )
+
+    subparsers = parser.add_subparsers(dest="mode", required=True)
+
+    subparsers.add_parser(
+        "enable", aliases=["e"], help="enable an installed plugin"
+    ).set_defaults(func=enable.load)
+
+    subparsers.add_parser(
+        "disable", aliases=["d"], help="disable an installed plugin"
+    ).set_defaults(func=disable.load)
+
+    subparsers.add_parser(
+        "toggle", aliases=["t"], help="toggle enabled/disabled for plugins"
+    ).set_defaults(func=toggle.load)
+
+    subparsers.add_parser(
+        "install", aliases=["i"], help="install an plugin from added sources"
+    ).set_defaults(func=install.load)
+
+    subparsers.add_parser(
+        "uninstall", aliases=["u"], help="uninstall a plugin from this device"
+    ).set_defaults(func=uninstall.load)
+
+    subparsers.add_parser(
+        "call", aliases=["c"], help="call specific plugins"
+    ).set_defaults(func=call.load)
+
+    subparsers.add_parser("list", aliases=["l"], help="list all plugins").set_defaults(
+        func=lip.load
+    )
+
+    args, _ = parser.parse_known_args()
+
+    sys.argv.pop(1)
+
+    args.func()
+
+
+
+
+
+
+impl/amca_pl_impl/disable.py:
+
+import impl.util.config.config as cf
+from pathlib import Path
+from impl.util.globals import global_dir_parser as gdp
+from InquirerPy import inquirer
+
+
+def load():
+    # Load plugin path
+    try:
+        plugin_path = Path(cf.plugin_settings.get("generic.plugin_path"))
+    except Exception:
+        print(f"Provided plugin_path in {cf.plugin_settings._path} is not valid")
+        return
+
+    if not plugin_path.exists():
+        print("Plugin path is not available, please ensure the path is valid")
+        return
+
+    path_info = gdp.parse_dir(plugin_path)
+    all_plugins = [str(p) for p in path_info.folders]
+
+    # Get enabled plugins
+    enabled_plugins = [str(p) for p in cf.plugin_settings.get("enabled_plugins") or []]
+
+    if not enabled_plugins:
+        print("No plugins are currently enabled!")
+        return
+
+    print("\nEnabled Plugins:")
+    # Interactive selection loop
+    while True:
+        choice = inquirer.select(
+            message="Pick a plugin to disable (or exit selection):",
+            choices=[*enabled_plugins, "Exit selection"],
+        ).execute()
+
+        if choice == "Exit selection":
+            break
+
+        # Update enabled plugins list
+        enabled_plugins.remove(choice)
+        all_plugins.append(choice)  # optional if you want to show it again as available
+
+        if not enabled_plugins:
+            print("No more plugins to disable.")
+            break
+
+    # Save updated enabled_plugins back to config
+    cf.plugin_settings.set("enabled_plugins", enabled_plugins)
+    cf.plugin_settings.save()
+
+
+
+
+
+
+impl/amca_pl_impl/toggle.py:
+
+import impl.util.config.config as cf
+from pathlib import Path
+from impl.util.globals import global_dir_parser as gdp
+from InquirerPy import inquirer
+
+
+def load():
+    # Load plugin path
+    try:
+        plugin_path = Path(cf.plugin_settings.get("generic.plugin_path"))
+    except Exception:
+        print(f"Provided plugin_path in {cf.plugin_settings._path} is not valid")
+        return
+
+    if not plugin_path.exists():
+        print("Plugin path is not available, please ensure the path is valid")
+        return
+
+    path_info = gdp.parse_dir(plugin_path)
+    all_plugins = [str(p) for p in path_info.folders]
+
+    enabled_plugins = [str(p) for p in cf.plugin_settings.get("enabled_plugins") or []]
+
+    if not all_plugins:
+        print("No plugins available in the plugin path!")
+        return
+
+    print("Available plugins")
+
+    last_index = 0  # Track the last cursor position
+
+    while True:
+        # Build choices with enabled/disabled mark
+        choices = [f"[{'X' if p in enabled_plugins else ' '}] {p}" for p in all_plugins]
+        choices.append("Exit selection")
+
+        choice = inquirer.select(
+            message="Toggle plugins (X = enabled):",
+            choices=choices,
+            default=choices[last_index],  # Keep cursor at last selected
+        ).execute()
+
+        if choice == "Exit selection":
+            break
+
+        # Update last_index to the index of selected item
+        last_index = choices.index(choice)
+
+        # Extract plugin name from choice string
+        plugin_name = choice[4:]
+
+        # Toggle plugin
+        if plugin_name in enabled_plugins:
+            enabled_plugins.remove(plugin_name)
+        else:
+            enabled_plugins.append(plugin_name)
+
+    # Save changes
+    cf.plugin_settings.set("enabled_plugins", enabled_plugins)
+    cf.plugin_settings.save()
+
+
+
+
+
+
+impl/amca_pl_impl/install.py:
+
+import impl.util.config.config as cf
+from pathlib import Path
+from InquirerPy import inquirer
+from impl.util import github  # your github.py
+from impl.util.globals import global_dir_parser as gdp
+
+
+def load():
+    # Load plugin path
+    try:
+        plugin_path = Path(cf.plugin_settings.get("generic.plugin_path"))
+    except Exception:
+        print(f"Provided plugin_path in {cf.plugin_settings._path} is not valid")
+        return
+
+    if not plugin_path.exists():
+        print("Plugin path is not available, please ensure the path is valid")
+        return
+
+    # Use gdp to get installed plugins (on disk)
+    path_info = gdp.parse_dir(plugin_path)
+    installed_plugins = [str(p) for p in path_info.folders]
+
+    # Get enabled plugins from config
+    enabled_plugins = [str(p) for p in cf.plugin_settings.get("enabled_plugins") or []]
+
+    # Plugins that exist on disk but are not enabled
+    available_plugins = [p for p in installed_plugins if p not in enabled_plugins]
+
+    # Add plugins from GitHub sources
+    sources = cf.plugin_settings.get("plugin_sources") or []
+    for source in sources:
+        if isinstance(source, str) and source.startswith("https://api.github.com/"):
+            contents = github.list_github_contents(api_url=source)
+        elif isinstance(source, dict):
+            contents = github.list_github_contents(
+                owner=source.get("owner"),
+                repo=source.get("repo"),
+                branch=source.get("branch", "main"),
+                path=source.get("path", ""),
+            )
+        else:
+            continue
+
+        remote_folders = [item["name"] for item in contents if item["type"] == "dir"]
+        # Only include remote plugins not already installed
+        for f in remote_folders:
+            if f not in installed_plugins:
+                available_plugins.append(f)
+
+    if not available_plugins:
+        print("No new plugins available to download or enable!")
+        return
+
+    print("\nAvailable Plugins:")
+    while True:
+        choice = inquirer.select(
+            message="Pick a plugin to download/enable (or exit selection):",
+            choices=[*available_plugins, "Exit selection"],
+        ).execute()
+
+        if choice == "Exit selection":
+            break
+
+        # Download plugin if it does not exist on disk
+        # Download plugin if it does not exist on disk
+        if choice not in installed_plugins:
+            for source in sources:
+                if isinstance(source, str) and source.startswith(
+                    "https://api.github.com/"
+                ):
+                    # Fix URL construction
+                    if "?ref=" in source:
+                        base, query = source.split("?ref=")
+                        branch = query
+                    else:
+                        base = source
+                        branch = "main"
+
+                    api_url = f"{base}/{choice}?ref={branch}"
+                    github.download_github_folder(
+                        api_url=api_url, local_dir=plugin_path / choice
+                    )
+                    break
+
+                elif isinstance(source, dict):
+                    path = source.get("path", "")
+                    full_path = f"{path}/{choice}".strip("/")
+                    github.download_github_folder(
+                        owner=source.get("owner"),
+                        repo=source.get("repo"),
+                        branch=source.get("branch", "main"),
+                        path=full_path,
+                        local_dir=plugin_path / choice,
+                    )
+                    break
+
+        # Update enabled and available lists
+        enabled_plugins.append(choice)
+        available_plugins.remove(choice)
+        installed_plugins.append(choice)  # now exists on disk
+
+        if not available_plugins:
+            print("No more plugins to download/enable.")
+            break
+
+    # Save enabled_plugins back to config
+    cf.plugin_settings.set("enabled_plugins", enabled_plugins)
+
+
+
+
+
+
+impl/amca_pl_impl/list.py:
+
+import impl.util.config.config as cf
+from pathlib import Path
+from impl.util.globals import global_dir_parser as gdp
+
+
+def load():
+    # Load plugin path
+    try:
+        plugin_path = Path(cf.plugin_settings.get("generic.plugin_path"))
+    except Exception:
+        print(f"Provided plugin_path in {cf.plugin_settings._path} is not valid")
+        return
+
+    if not plugin_path.exists():
+        print("Plugin path is not available, please ensure the path is valid")
+        return
+
+    path_info = gdp.parse_dir(plugin_path)
+    all_plugins = [str(p) for p in path_info.folders]
+    enabled_plugins = set(cf.plugin_settings.get("enabled_plugins") or [])
+
+    if not all_plugins:
+        print("No plugins available in the plugin path!")
+        return
+
+    print("Installed plugins:\n")
+
+    for plugin in all_plugins:
+        status = "ENABLED" if plugin in enabled_plugins else "disabled"
+        print(f" - {plugin} [{status}]")
+
+
+
+
+
+
+impl/amca_impl/argparse.py:
+
+import sys
+import argparse as ap
+from pathlib import Path
+from textwrap import dedent
+import impl.util.config.config as cf
+from impl.amca_impl import new, remove, args_cli
+from impl.amca_impl.impl_execute import execute
+from impl.util.globals import global_dir_parser as gdp, amca_root_dir_info
+
+
+def normalize_plugin_opt_name(folder_name: str) -> str:
+    return folder_name.replace("_", "-")
+
+
+def normalize_plugin_name(name: str) -> str:
+    return normalize_plugin_opt_name(str(name))
+
+
+def build_main_parser(plugin_folders, enabled_plugins):
+    """
+    Build the top-level argparse parser and include enabled plugin markers in help.
+    """
+    plugin_markers = " ".join(
+        f"--{normalize_plugin_opt_name(f)}"
+        for f in sorted(plugin_folders)
+        if normalize_plugin_name(f) in enabled_plugins
+    )
+
+    epilog = dedent(
+        f"""
+        Amca Version 2.0.1
+
+        Plugin passthrough:
+          You can pass arbitrary arguments to enabled plugins using plugin markers:
+            {plugin_markers or "(no plugins enabled)"}
+
+          Example:
+            amca execute --meson <meson_args> --git <git_args>
+
+          Notes:
+            - Anything after a plugin marker is considered arguments for that plugin
+              until the next plugin marker or end-of-command.
+            - Plugin args are not interpreted by amca; they are handed to the plugin loader.
+            - Plugin parsing is disabled for management subcommands: new (n), remove (r), args (a).
+        """
+    )
+
+    parser = ap.ArgumentParser(
+        prog="amca",
+        description="loads plugins dynamically for AMCA",
+        epilog=epilog,
+        formatter_class=ap.RawDescriptionHelpFormatter,
+        add_help=True,
+    )
+
+    subparsers = parser.add_subparsers(dest="mode")
+
+    subparsers.add_parser(
+        "new", aliases=["n"], help="create new amca root directory"
+    ).set_defaults(func=new.load)
+
+    subparsers.add_parser(
+        "remove", aliases=["r"], help="remove amca root directory"
+    ).set_defaults(func=remove.load)
+
+    subparsers.add_parser(
+        "args", aliases=["a"], help="cli interface for changing args"
+    ).set_defaults(func=args_cli.load)
+
+    subparsers.add_parser(
+        "execute",
+        aliases=["e"],
+        help="execute amca plugin loading (default if no arg is present)",
+    ).set_defaults(func=execute.load)
+
+    return parser
+
+
+def extract_plugin_args(argv, plugin_folders):
+    """
+    Extract plugin argument groups using --<plugin> markers.
+    """
+    normalized_to_folder = {}
+    plugin_markers = set()
+
+    for f in plugin_folders:
+        norm = normalize_plugin_opt_name(f)
+        marker = f"--{norm}"
+        plugin_markers.add(marker)
+        normalized_to_folder[marker] = f
+
+    remaining = []
+    plugin_args = {f: [] for f in plugin_folders}
+
+    i = 0
+    L = len(argv)
+
+    while i < L:
+        tok = argv[i]
+
+        if tok in plugin_markers:
+            plugin = normalized_to_folder[tok]
+            plugin_args[plugin] = []
+            i += 1
+
+            while i < L and argv[i] not in plugin_markers:
+                plugin_args[plugin].append(argv[i])
+                i += 1
+        else:
+            remaining.append(tok)
+            i += 1
+
+    return remaining, plugin_args
+
+
+def eval_args():
+    # --- config ---
+    enabled_plugins = {
+        normalize_plugin_name(p)
+        for p in (cf.plugin_settings.get("enabled_plugins") or [])
+    }
+
+    warn_if_not_enabled = bool(
+        cf.plugin_settings.get("logging.warn_if_plugin_arg_not_enabled")
+    )
+
+    # --- discovery ---
+    plugin_path = Path(cf.plugin_settings.get("generic.plugin_path"))
+    plugins = gdp.parse_dir(plugin_path).folders  # set(str)
+
+    raw_argv = sys.argv[1:]
+
+    # Disable plugin parsing for management commands
+    management_tokens = {"new", "n", "remove", "r", "args", "a"}
+    skip_plugin_parsing = any(tok in management_tokens for tok in raw_argv)
+
+    if skip_plugin_parsing:
+        remaining_argv = raw_argv
+        plugin_args_map = {p: [] for p in plugins}
+    else:
+        remaining_argv, plugin_args_map = extract_plugin_args(raw_argv, plugins)
+
+    # Filter + warn for disabled plugins
+    filtered_plugin_args = {}
+
+    arg_path = Path()
+    if amca_root_dir_info is not None:
+        amca_root_folder = amca_root_dir_info.path / cf.general_settings.get(
+            "amca_root.folder_name"
+        )
+        arg_path = amca_root_folder / "args"
+
+    for plugin, args in plugin_args_map.items():
+        norm = normalize_plugin_name(plugin)
+
+        if norm in enabled_plugins:
+            if amca_root_dir_info is not None:
+
+                plugin_arg_file = arg_path / plugin
+                if plugin_arg_file.exists():
+                    tf = []
+                    with plugin_arg_file.open("r", encoding="utf-8") as fh:
+                        for line in fh:
+                            line = line.strip()
+                            if not line or line.startswith("#"):
+                                continue
+                            tf.append(line)
+
+                    args = [*tf, *args]
+
+            filtered_plugin_args[plugin] = args
+        else:
+            filtered_plugin_args[plugin] = []
+
+            if args and warn_if_not_enabled:
+                print(
+                    f"[amca] warning: arguments provided for disabled plugin "
+                    f"'{plugin}' → ignored"
+                )
+
+    plugin_args_map = filtered_plugin_args
+
+    # Parse remaining args
+    parser = build_main_parser(plugins, enabled_plugins)
+    parsed = parser.parse_args(remaining_argv)
+
+    # Execute
+    if hasattr(parsed, "func"):
+        parsed.func(parsed, plugin_args_map)
+    else:
+        if cf.general_settings.get("debug"):
+            print("No subcommand; parsed:", parsed)
+            print("Plugin args:", plugin_args_map)
+        execute.load(parsed, plugin_args_map)
+
+
+if __name__ == "__main__":
+    eval_args()
+
+
+
+
+
+
+impl/amca_impl/new.py:
+
+from pathlib import Path
+from impl.util.config.config import general_settings
+import os
+
+
+def create_amca_root(path: Path):
+    (path / str(general_settings.get("amca_root_folder_name"))).mkdir(
+        parents=True, exist_ok=True
+    )
+
+
+def load(args, plugin_args_map):
+    root_folder_name = str(general_settings.get("amca_root.folder_name"))
+    create_amca_root((Path(os.getcwd()) / root_folder_name).resolve())
+
+
+
+
+
+
+impl/amca_impl/args_cli.py:
+
+import subprocess
+from impl.util.globals import global_dir_parser as gdp, amca_root_dir_info
+from impl.util.config.config import general_settings, plugin_settings
+from pathlib import Path
+from InquirerPy import inquirer
+
+
+def load(args, plugin_args_map):
+    if amca_root_dir_info is not None:
+        amca_root_folder = amca_root_dir_info.path / general_settings.get(
+            "amca_root.folder_name"
+        )
+        amca_root_folder_info = gdp.parse_dir(amca_root_folder)
+
+        plugin_path = Path(plugin_settings.get("generic.plugin_path"))
+        path_info = gdp.parse_dir(plugin_path)
+        available_plugins = [str(p) for p in path_info.folders]
+
+        choice = inquirer.select(
+            message="Pick a plugin to edit args:",
+            choices=[*available_plugins, "None (exit)"],
+        ).execute()
+
+        if choice == "None (exit)":
+            return
+
+        arg_fol = amca_root_folder_info.path / "args"
+        arg_fol.mkdir(parents=True, exist_ok=True)
+
+        plugin_args_file = arg_fol / f"{choice}.args"
+        editor = general_settings.get("default_file_editor")
+
+        subprocess.call([editor, plugin_args_file])
+    else:
+        print(
+            "No amca root was detected, ensure one exists, refer to --help (create one with amca n)"
+        )
+
+
+
+
+
+
+impl/amca_impl/remove.py:
+
+from pathlib import Path
+from impl.util.config.config import general_settings
+from impl.util.globals import amca_root_dir_info
+from impl.util.input import query_yes_no
+import shutil as sh
+
+
+def load(args, plugin_args_map):
+    if amca_root_dir_info is not None:
+        root_folder_name = str(general_settings.get("amca_root.folder_name"))
+        if query_yes_no(
+            f"Would you like to delete: {amca_root_dir_info.path / root_folder_name}?"
+        ):
+            sh.rmtree(amca_root_dir_info.path / root_folder_name)
+
+
+
+
+
+
+impl/amca_impl/impl_execute/execute.py:
+
+from impl.amca_impl.impl_execute.module_handler import load_if_valid_module
+import impl.util.config.config as cf
+from pathlib import Path
+from impl.util.globals import global_dir_parser as gdp
+from impl.util.globals import glog
+from impl.util.globals import amca_root_dir_info
+import os
+
+
+def load(args, plugin_args_map):
+    plugin_info = gdp.parse_dir(Path(cf.plugin_settings.get("generic.plugin_path")))
+    modules = []
+    for plugin in plugin_info.folders:
+        init_path = plugin_info.path / plugin / "init.py"
+        if init_path.exists():
+            # produce a DirInfo for the plugin root and pass gdp as dir_parser
+            plugin_root_info = gdp.parse_dir(init_path.parent)
+            module_or_instance = load_if_valid_module(
+                init_path, plugin_root_info=plugin_root_info, dir_parser=gdp
+            )
+            if module_or_instance is not None:
+                modules.append(module_or_instance)
+
+    to_load_modules = []
+    working_dir_info = gdp.parse_dir(Path(os.getcwd()))
+
+    for plugin, pluginname in modules:
+        # plugin might be a module or an instance — both should expose should_load/load
+        try:
+            if plugin.should_load(amca_root_dir_info, working_dir_info, gdp):
+                to_load_modules.append([plugin, pluginname])
+        except Exception as exc:
+            glog.error(f"Error when calling should_load on {plugin}: {exc}")
+
+    for plugin, pluginname in to_load_modules:
+        try:
+            plugin.load(
+                amca_root_dir_info, working_dir_info, gdp, plugin_args_map[pluginname]
+            )
+        except Exception as exc:
+            glog.error(f"Error while loading plugin {plugin}: {exc}")
+
+
+
+
+
+
+impl/amca_impl/impl_execute/module_handler.py:
+
+from __future__ import annotations
+
+import importlib.util as importlib_util
+import inspect
+import sys
+import types
+import uuid
+from pathlib import Path
+from types import ModuleType
+from typing import Any, List, Optional, Union, Tuple
+
+from plugin.plugin_base import Plugin as abstract_plugin
+from impl.util.globals import glog
+
+
+class PluginLoadError(Exception):
+    """Raised when a plugin cannot be loaded from a file."""
+
+
+def _ensure_path_inserted(path_str: str) -> bool:
+    """Insert path_str at front of sys.path if not already present. Return True if inserted."""
+    if path_str in sys.path:
+        return False
+    sys.path.insert(0, path_str)
+    return True
+
+
+def _gather_candidate_sys_paths(plugin_dir: Path) -> List[str]:
+    plugin_dir = plugin_dir.resolve()
+    candidates: List[str] = []
+
+    # plugin dir itself
+    candidates.append(str(plugin_dir))
+
+    # include any immediate sub-package dirs to help resolving local imports
+    for sub in plugin_dir.iterdir():
+        if sub.is_dir():
+            candidates.append(str(sub))
+
+    # installed_plugins (parent)
+    parent_dir = plugin_dir.parent
+    candidates.append(str(parent_dir))
+
+    # walk upwards to find a directory which *looks* like project root (heuristic)
+    up = plugin_dir
+    for _ in range(6):
+        if (up / "src").exists() or (up / "plugin").exists() or (up / "impl").exists():
+            candidates.append(str(up))
+            break
+        if up.parent == up:
+            break
+        up = up.parent
+
+    # de-duplicate preserving order and ensure path exists
+    seen = set()
+    ordered: List[str] = []
+    for p in candidates:
+        if p not in seen and Path(p).exists():
+            seen.add(p)
+            ordered.append(p)
+    return ordered
+
+
+def _maybe_inject_local_packages(plugin_dir: Path) -> List[str]:
+    """
+    Inject synthetic package modules for any top-level subdirectories of plugin_dir
+    that look like packages (contain init.py) and are not already importable.
+
+    This avoids hard-coding an "impl" name and supports arbitrary package names
+    that plugin authors may choose. Returns list of injected package names.
+    """
+    injected: List[str] = []
+    for sub in plugin_dir.iterdir():
+        if not sub.is_dir():
+            continue
+        if (sub / "init.py").exists():
+            name = sub.name
+            if name in sys.modules:
+                continue
+            try:
+                pkg = types.ModuleType(name)
+                pkg.__path__ = [str(sub.resolve())]
+                sys.modules[name] = pkg
+                injected.append(name)
+            except Exception:
+                pass
+    return injected
+
+
+def load_module_from_path(
+    filepath: Path, module_name: Optional[str] = None
+) -> Optional[ModuleType]:
+    """
+    Load a module from a specific file path. If filepath is an init.py we prefer
+    to use the containing folder name as the module name so package-style imports
+    (relative and absolute within the package) resolve sensibly.
+    """
+    module = None
+    filepath = filepath.resolve()
+    if module_name is None:
+        if filepath.name == "init.py":
+            module_name = filepath.parent.name
+        else:
+            module_name = f"amca_plugin_{filepath.stem}_{uuid.uuid4().hex[:8]}"
+
+    try:
+        spec = importlib_util.spec_from_file_location(module_name, str(filepath))
+        if spec is None or spec.loader is None:
+            raise PluginLoadError(f"spec not found or loader missing for {filepath!s}")
+
+        module = importlib_util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)  # type: ignore[attr-defined]
+        return module
+    except Exception as exc:
+        try:
+            if module_name in sys.modules and sys.modules[module_name] is module:
+                del sys.modules[module_name]
+        except Exception:
+            pass
+        glog.error(f"Failed to load plugin '{module_name}' from '{filepath}': {exc}")
+        return None
+
+
+def find_plugin_classes_by_duck_typing(module: ModuleType) -> List[type]:
+    """
+    Return classes *defined in module* that implement the plugin API by duck-typing:
+    they have callable should_load(...) and load(...).
+    """
+    results: List[type] = []
+    for _, obj in inspect.getmembers(module, inspect.isclass):
+        if obj.__module__ != module.__name__:
+            continue
+        if callable(getattr(obj, "should_load", None)) and callable(
+            getattr(obj, "load", None)
+        ):
+            results.append(obj)
+    return results
+
+
+def find_subclasses_in_module(module: ModuleType, abstract_cls: type) -> List[type]:
+    """Return classes defined in module that subclass abstract_cls (ignore imported classes)."""
+    subclasses: List[type] = []
+    for _, obj in inspect.getmembers(module, inspect.isclass):
+        if obj.__module__ != module.__name__:
+            continue
+        try:
+            if issubclass(obj, abstract_cls) and obj is not abstract_cls:
+                subclasses.append(obj)
+        except TypeError:
+            continue
+    return subclasses
+
+
+def _try_instantiate(
+    cls: type, plugin_root_info: Any = None, dir_parser: Any = None
+) -> Optional[object]:
+    """
+    Try multiple constructor shapes and return an instance or None.
+    Preference: (plugin_root_info, dir_parser) -> (plugin_root_info) -> ()
+    """
+    try_variants = []
+    if plugin_root_info is not None and dir_parser is not None:
+        try_variants.append((plugin_root_info, dir_parser))
+    if plugin_root_info is not None:
+        try_variants.append((plugin_root_info,))
+    try_variants.append(tuple())
+
+    for args in try_variants:
+        try:
+            return cls(*args)
+        except TypeError:
+            # ctor signature didn't match -> try next
+            continue
+        except Exception as exc:
+            glog.error(f"Instantiation error for {cls!r} with args {args}: {exc}")
+            return None
+    return None
+
+
+def _maybe_call_init(module_or_instance: Any) -> None:
+    """
+    If the module or instance exposes an init/setup function, call it (best-effort).
+    Accepts names: 'init', 'initialize', 'setup'.
+    """
+    for name in ("init", "initialize", "setup"):
+        fn = getattr(module_or_instance, name, None)
+        if callable(fn):
+            try:
+                fn()
+            except Exception as exc:
+                glog.error(f"Error calling {name} on {module_or_instance}: {exc}")
+            break
+
+
+def _derive_plugin_name(candidate: Any, filepath: Path) -> str:
+    """
+    Determine a plugin name string from various heuristics:
+      - PLUGIN_NAME module attribute (if module provided)
+      - __plugin_name__ attribute
+      - instance attribute 'name' or 'plugin_name'
+      - module.__package__ or module.__name__
+      - fallback to containing folder name
+    """
+    # module-level attrs
+    try:
+        if isinstance(candidate, ModuleType):
+            if isinstance(getattr(candidate, "PLUGIN_NAME", None), str):
+                return candidate.PLUGIN_NAME
+            if isinstance(getattr(candidate, "__plugin_name__", None), str):
+                return candidate.__plugin_name__
+            if candidate.__package__:
+                return candidate.__package__
+            return candidate.__name__
+
+        # instance-level attrs
+        if hasattr(candidate, "PLUGIN_NAME") and isinstance(
+            getattr(candidate, "PLUGIN_NAME"), str
+        ):
+            return getattr(candidate, "PLUGIN_NAME")
+        if hasattr(candidate, "plugin_name") and isinstance(
+            getattr(candidate, "plugin_name"), str
+        ):
+            return getattr(candidate, "plugin_name")
+        if hasattr(candidate, "name") and isinstance(getattr(candidate, "name"), str):
+            return getattr(candidate, "name")
+    except Exception:
+        pass
+
+    # fallback to the containing folder name
+    return filepath.parent.name
+
+
+def load_if_valid_module(
+    path: Path,
+    abstract_cls: type = abstract_plugin,
+    plugin_root_info: Any = None,
+    dir_parser: Any = None,
+) -> Optional[Tuple[Union[ModuleType, object], str]]:
+    """
+    Load plugin and return either:
+      - (module, plugin_name) (if module-level API present), or
+      - (instantiated_plugin_object, plugin_name) (if class-based plugin)
+
+    plugin_root_info and dir_parser are optional context objects to pass to plugin constructors.
+    """
+    plugin_dir = path.parent
+
+    # --- insert candidate sys.path entries ---
+    candidate_paths = _gather_candidate_sys_paths(plugin_dir)
+    inserted_paths = []
+    for p in candidate_paths:
+        if _ensure_path_inserted(p):
+            inserted_paths.append(p)
+
+    # --- maybe inject synthetic local package modules ---
+    injected_packages: List[str] = []
+    try:
+        injected_packages = _maybe_inject_local_packages(plugin_dir)
+
+        # choose module name preference: if loading an init.py use the folder name
+        module_name = None
+        if path.name == "init.py":
+            module_name = plugin_dir.name
+
+        module = load_module_from_path(path, module_name=module_name)
+        if module is None:
+            return None
+
+        # 1) module-level API (module.should_load / module.load)
+        if callable(getattr(module, "should_load", None)) and callable(
+            getattr(module, "load", None)
+        ):
+            # optional module init hook
+            _maybe_call_init(module)
+            return module, _derive_plugin_name(module, path)
+
+        # 2) classes that subclass the project's abstract base
+        plugin_classes = find_subclasses_in_module(module, abstract_cls)
+        if plugin_classes:
+            for cls in plugin_classes:
+                inst = _try_instantiate(cls, plugin_root_info, dir_parser)
+                if (
+                    inst is not None
+                    and callable(getattr(inst, "should_load", None))
+                    and callable(getattr(inst, "load", None))
+                ):
+                    _maybe_call_init(inst)
+                    return inst, _derive_plugin_name(inst, path)
+            glog.error(
+                f"Found classes subclassing abstract base in {path} but none could be instantiated usable."
+            )
+
+        # 3) duck-typed classes defined in module (have should_load/load)
+        duck_classes = find_plugin_classes_by_duck_typing(module)
+        if duck_classes:
+            for cls in duck_classes:
+                inst = _try_instantiate(cls, plugin_root_info, dir_parser)
+                if (
+                    inst is not None
+                    and callable(getattr(inst, "should_load", None))
+                    and callable(getattr(inst, "load", None))
+                ):
+                    _maybe_call_init(inst)
+                    return inst, _derive_plugin_name(inst, path)
+            glog.error(
+                f"Found duck-typed plugin classes in {path} but none instantiable."
+            )
+
+        # 4) module.PLUGINS list (pre-instantiated)
+        maybe_plugins = getattr(module, "PLUGINS", None)
+        if isinstance(maybe_plugins, list):
+            for candidate in maybe_plugins:
+                if callable(getattr(candidate, "should_load", None)) and callable(
+                    getattr(candidate, "load", None)
+                ):
+                    _maybe_call_init(candidate)
+                    return candidate, _derive_plugin_name(candidate, path)
+
+        glog.warn(f"No usable plugin found in {path}")
+        return None
+
+    finally:
+        # keep sys.path and injected modules in place — callers may rely on them
+        # If you want to remove injected packages after load, do it explicitly here.
+        pass
+
+
+
+
+

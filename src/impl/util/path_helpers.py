@@ -30,17 +30,14 @@ def _find_amca_root_dir() -> Optional[DirInfo]:
         seach_path = seach_path.parent
 
     ignored_root_paths: list[str] = cf.general_settings.get("amca_root.ignored_paths")
-    if str(ori_seach_path) not in ignored_root_paths:
+    if str(ori_seach_path) not in ignored_root_paths and return_val is None:
         if query_yes_no(
             "No amca root was found, would you like to create one in this directory?"
         ):
-            create_amca_root(ori_seach_path)
+            create_amca_root(ori_seach_path / root_folder_name)
             return_val = gdp.parse_dir(ori_seach_path)
         else:
             ignored_root_paths.append(str(ori_seach_path))
             cf.general_settings.set("amca_root.ignored_paths", ignored_root_paths)
 
     return return_val
-
-
-amca_root_dir_info = _find_amca_root_dir()

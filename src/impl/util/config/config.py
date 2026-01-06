@@ -2,6 +2,7 @@ from impl.util.github import gen_github_api_link
 from impl.util.settings import Settings
 import sys
 from pathlib import Path
+import impl.util.globals as globals
 
 
 class _SettingsManager:
@@ -19,8 +20,8 @@ class _SettingsManager:
         return self.get(key)
 
     def _load(self, key: str):
-        root_path = Path(sys.argv[0]).parent.parent.resolve()
-        config_path = root_path / "config"
+        root_path = globals.root_dir
+        config_path = root_path / "Amca_config"
         config_path.mkdir(exist_ok=True)
 
         if key == "general":

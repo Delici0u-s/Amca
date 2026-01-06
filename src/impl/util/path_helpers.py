@@ -7,6 +7,8 @@ import os, sys
 from impl.amca_impl.new import create_amca_root
 from impl.util.input import query_yes_no
 
+import impl.util.globals as globals
+
 
 def _find_amca_root_dir() -> Optional[DirInfo]:
     ori_seach_path = Path(os.getcwd()).resolve()
@@ -15,7 +17,7 @@ def _find_amca_root_dir() -> Optional[DirInfo]:
     root_folder_name = str(cf.general_settings.get("amca_root.folder_name"))
     if root_folder_name.count("/") + root_folder_name.count("\\") != 0:
         print(
-            f"Ensure amca_root.folder_name in {Path(sys.argv[0]).parent} is a single folders name, not a path"
+            f'Ensure "amca_root.folder_name" in {globals.root_dir} is a single folders name, not a path'
         )
         sys.exit(1)
 

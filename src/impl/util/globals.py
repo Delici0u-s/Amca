@@ -2,8 +2,9 @@ import impl.util.logger as logger
 import sys
 from pathlib import Path
 from impl.util.dirparse import DirParser
+from config_path import config_path
 
-root_dir = Path(sys.argv[0]).parent
+root_dir = Path(config_path)
 
 glog: logger.Logger = logger.Logger(root_dir / "amca_log.log")
 

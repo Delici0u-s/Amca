@@ -6,8 +6,6 @@ import impl.amca_pl_impl.argparse as argparse
 
 
 def main():
-    # cf.ensure_config_structure()
-
     if cf.general_settings.get("extreamly_important.greet_user"):
         print("Hello Master")
 

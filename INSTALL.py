@@ -1,9 +1,9 @@
-import sys
+import sys, os
 import subprocess
 from pathlib import Path
 from typing import Optional, Set, Tuple
 import shutil
-
+from src.impl.util.input import query_yes_no
 
 # Track installed packages WITH versions
 installed_pip_dependencies: Set[Tuple[str, str]] = set()
@@ -140,6 +140,74 @@ def create_venv() -> None:
     package_install("pip", "24.0")
 
 
+def get_conf_path(debug: bool = False) -> Path:
+    outp = Path()
+    if debug:
+        return Path(__file__).parent / "AmcaConfigTest"
+
+    # eval default path:
+    if sys.platform.startswith("linux"):
+        config_path = Path.home() / ".config"
+    elif sys.platform.startswith("win"):
+        config_path = Path.home() / "Documents"
+    else:
+        raise OSError(f"Unsupported operating system: {sys.platform}")
+
+    amca_conf_path = config_path / "Amca"
+
+    print("Default amca_config location: ")
+    print(amca_conf_path)
+
+    # override amca_conf_path by user if he wishes
+    # 1) Environment variable override
+    env_override = os.environ.get("AMCA_CONFIG_PATH") or os.environ.get("AMCA_PATH")
+    if env_override:
+        try:
+            env_path = Path(env_override).expanduser().resolve()
+            print(f"Overriding from environment variable: {env_path}")
+            amca_conf_path = env_path
+        except Exception as e:
+            print(f"Warning: invalid path in environment variable: {e}")
+    elif sys.stdin and sys.stdin.isatty():
+        try:
+            inp = input(
+                f"Press Enter to accept default or type a custom path to override: "
+            ).strip()
+            if inp:
+                try:
+                    user_path = Path(inp).expanduser().resolve()
+                    print(f"Using user-provided path: {user_path}")
+                    amca_conf_path = user_path
+                except Exception as e:
+                    print(
+                        f"Warning: invalid path supplied: {e}. Falling back to default."
+                    )
+        except (KeyboardInterrupt, EOFError):
+            print("Input cancelled. Using default path.")
+
+    if amca_conf_path.exists():
+        if query_yes_no("Amca_root dir already exists, do you wish to remove it?"):
+            shutil.rmtree(amca_conf_path)
+
+    amca_conf_path.mkdir(parents=True, exist_ok=True)
+
+    src_fil = Path(__file__).parent / "src" / "config_path.py"
+
+    src_config_file = f"""config_path = \"{str(amca_conf_path)}\"
+
+# yes, i know this dumb as shit, but idk how to avoid symlink stuff lol
+
+# TODO: Implement automatically hard_writing this in INSTALL.py, with a user defined custom config path,
+# linux usually ~/.config/Amca
+# windows usually HOME/Documents/Amca
+    """
+
+    with open(src_fil, "w") as f:
+        f.write(src_config_file)
+
+    return outp
+
+
 def create_compiled():
     if package_install("pyinstaller", "6.10.0"):
         src_path: Path = (Path(__file__).parent / "src").resolve()
@@ -172,6 +240,7 @@ def create_compiled():
 
 
 def main():
+    get_conf_path()
     # venv_path: Path | None = create_venv()
     create_venv()
     package_install("InquirerPy", "0.3.3")

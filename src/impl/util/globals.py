@@ -6,7 +6,7 @@ from config_path import config_path
 
 root_dir = Path(config_path)
 
-glog: logger.Logger = logger.Logger(root_dir / "amca_log.log")
+glog: logger.Logger = logger.Logger(root_dir / "Amca_config" / "amca_log.log")
 
 global_dir_parser = DirParser()
 

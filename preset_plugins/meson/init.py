@@ -1,5 +1,5 @@
-from implementation.plugin_base import *
-import implementation.meson_implementation_i_guess as impl
+from impl.amca.plugin_base import *
+import impl.meson_implementation_i_guess as impl
 
 
 class meson(Plugin):

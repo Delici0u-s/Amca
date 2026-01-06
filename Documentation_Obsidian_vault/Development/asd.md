@@ -40,3 +40,35 @@ amca
 		- force amca in new path if doesnt exist alr
 	- args a
 		- edit args via cli interface
+
+meson:
+- by default
+	- setup
+	- reconfigure
+	- compile
+	- execute
+- Default modes: `amca <opt: mode> [args]`
+	- None
+		- default pipeline (setup/reconfigure/compile/run)
+	- setup 
+	- reconfigure 
+	- compile
+	- run
+	- clean
+	- test
+- flags
+	- `--builddir <dir>` (short `-C`) — build dir
+	- `--skip-reconf` (short `-n r`) — do not reconfigure
+	- `--skip-compile` (short `-n c`) — do not compile
+	- `--skip-exec` (short `-n e`) — do not execute
+	- `--clean` / `--clear` — remove build artifacts (maps to a safe clean)
+	- `--wipe` — remove builddir entirely (dangerous; require `--force`)
+	- `--s` — shorthand: `--clear` then run (your original semantics)
+	- `--clear-console` (short `-c`) — clear the terminal before executing the final binary
+	- `--meson-setup-args "..."` (or `-A b`) — pass-through to `meson setup/configure`
+	- `--meson-compile-args "..."` (or `-A c`)
+	- `--exec-args "..."` (or `-A e`)
+	- `--dry-run` — show commands without running
+	- `--force` — allow destructive action
+	- `--verbose` / `--quiet` — logging level
+	- `--jobs N` or `-j N` number of threads to compile in, default `$(nproc)`

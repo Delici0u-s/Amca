@@ -1,4 +1,4 @@
-config_path = "/home/quad/programming/guts/Amca/AmcaTest"
+config_path = "/home/quad/programming/guts/Amca/AMCA_CONF_TEST"
 
 # yes, i know this dumb as shit, but idk how to avoid symlink stuff lol
 

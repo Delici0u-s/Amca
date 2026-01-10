@@ -3,4 +3,5 @@
 runners/
 .venv/
 compiled/
+.Amca/
 

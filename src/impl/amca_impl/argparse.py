@@ -20,12 +20,14 @@ def build_main_parser(plugin_folders, enabled_plugins):
     """
     Build the top-level argparse parser and include enabled plugin markers in help.
     """
+    plugin_arg_prefix = cf.plugin_settings.get("args.plugin_prefix")
     plugin_markers = " ".join(
-        f"--{normalize_plugin_opt_name(f)}"
+        f"{plugin_arg_prefix}{normalize_plugin_opt_name(f)}"
         for f in sorted(plugin_folders)
         if normalize_plugin_name(f) in enabled_plugins
     )
 
+    plugin_arg_prefix = cf.plugin_settings.get("args.plugin_prefix")
     epilog = dedent(
         f"""
         Amca Version 2.0.1
@@ -35,7 +37,7 @@ def build_main_parser(plugin_folders, enabled_plugins):
             {plugin_markers or "(no plugins enabled)"}
 
           Example:
-            amca execute --meson <meson_args> --git <git_args>
+            amca execute {plugin_arg_prefix}meson <meson_args> {plugin_arg_prefix}git <git_args>
 
           Notes:
             - Anything after a plugin marker is considered arguments for that plugin
@@ -77,15 +79,16 @@ def build_main_parser(plugin_folders, enabled_plugins):
 
 
 def extract_plugin_args(argv, plugin_folders):
-    """
-    Extract plugin argument groups using --<plugin> markers.
+    plugin_arg_prefix = cf.plugin_settings.get("args.plugin_prefix")
+    f"""
+    Extract plugin argument groups using {plugin_arg_prefix}<plugin> markers.
     """
     normalized_to_folder = {}
     plugin_markers = set()
 
     for f in plugin_folders:
         norm = normalize_plugin_opt_name(f)
-        marker = f"--{norm}"
+        marker = f"{plugin_arg_prefix}{norm}"
         plugin_markers.add(marker)
         normalized_to_folder[marker] = f
 

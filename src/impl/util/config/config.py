@@ -42,6 +42,7 @@ class _SettingsManager:
             installed_plugins = plugin_path / "installed_plugins"
             installed_plugins.mkdir(exist_ok=True)
             s = Settings(str(plugin_conf), auto_save=True, backend="json")
+            s.default("args.plugin_prefix", "---")
             s.default("generic.exit_on_plugin_error", False)
             s.default("generic.exit_on_plugin_not_found", False)
             s.default("generic.plugin_path", str(installed_plugins))

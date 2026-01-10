@@ -3,6 +3,9 @@ import sys
 from pathlib import Path
 
 if __name__ == "__main__":
-    # sys.argv[0] = str(Path(sys.executable).resolve())
-    sys.argv[0] = __file__
-    sys.exit(im.main())
+    try:
+        # sys.argv[0] = str(Path(sys.executable).resolve())
+        sys.argv[0] = __file__
+        sys.exit(im.main())
+    except KeyboardInterrupt:
+        sys.exit(130)

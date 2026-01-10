@@ -11,12 +11,9 @@ class meson(Plugin):
         dir_parser: DirParser,
     ) -> bool:
 
-        if amca_root_dir is None:
-            self.meson_root_info = working_dir
-        else:
-            self.meson_root_info = amca_root_dir
+        dir_inf = working_dir if amca_root_dir is None else amca_root_dir
 
-        return "meson.build" in self.meson_root_info.files
+        return "meson.build" in dir_inf.files
 
     def load(
         self,
@@ -25,4 +22,7 @@ class meson(Plugin):
         dir_parser: DirParser,
         args: list[str],
     ) -> None:
-        impl.run(self.meson_root_info, dir_parser, args)
+
+        dir_inf = working_dir if amca_root_dir is None else amca_root_dir
+
+        impl.run(dir_inf, dir_parser, args)

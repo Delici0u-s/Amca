@@ -26,8 +26,10 @@ def load():
 
     plugin = None
 
+    plugin_arg_prefix = cf.plugin_settings.get("args.plugin_prefix")
+
     if len(args) != 0:
-        if args[0].startswith("--"):
+        if args[0].startswith(plugin_arg_prefix):
             split = args[0][2:].split(" ")
             plugin = split[0]
             if len(split) > 1:

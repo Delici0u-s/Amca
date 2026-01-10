@@ -32,10 +32,16 @@ def load(args, plugin_args_map):
         except Exception as exc:
             glog.error(f"Error when calling should_load on {plugin}: {exc}")
 
+    enabled_plugins = [str(p) for p in cf.plugin_settings.get("enabled_plugins") or []]
+
     for plugin, pluginname in to_load_modules:
         try:
-            plugin.load(
-                amca_root_dir_info, working_dir_info, gdp, plugin_args_map[pluginname]
-            )
+            if pluginname in enabled_plugins:
+                plugin.load(
+                    amca_root_dir_info,
+                    working_dir_info,
+                    gdp,
+                    plugin_args_map[pluginname],
+                )
         except Exception as exc:
             glog.error(f"Error while loading plugin {plugin}: {exc}")

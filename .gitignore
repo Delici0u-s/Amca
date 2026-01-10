@@ -4,4 +4,5 @@ runners/
 .venv/
 compiled/
 .Amca/
+AMCA_CONF_TEST/
 

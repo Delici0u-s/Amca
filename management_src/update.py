@@ -134,7 +134,7 @@ def _update_preset_plugins(conf_path: Path) -> tuple[list[str], list[str]]:
     User-installed plugins (names not in preset_plugins/) are left untouched.
     Returns (updated_names, kept_user_plugin_names).
     """
-    from _helpers import repo_root
+    from .helpers import repo_root
     preset_src = repo_root() / "preset_plugins"
     if not preset_src.is_dir():
         print("  WARNING: preset_plugins/ not found — skipping plugin update.")

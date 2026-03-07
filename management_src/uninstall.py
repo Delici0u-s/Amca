@@ -94,7 +94,7 @@ def _remove_config_dir(conf_path: Path, auto_yes: bool) -> bool:
 
 
 def _remove_compiled_dir(auto_yes: bool) -> bool:
-    from _helpers import repo_root
+    from .helpers import repo_root
     compiled = repo_root() / "compiled"
     if not compiled.exists():
         print("  compiled/ not found.")

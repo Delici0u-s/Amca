@@ -17,7 +17,7 @@ Direct subcommands:
 Standard library ONLY — no third-party packages required to run this script.
 """
 
-from __future__ import annotations
+from .management_src._future__ import annotations
 
 import argparse
 import sys
@@ -123,7 +123,7 @@ def _pause() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _menu_install() -> None:
-    from _install import run as _run
+    from management_src.install import run as _run
 
     print()
     print("  Install")
@@ -153,7 +153,7 @@ def _menu_install() -> None:
 
 
 def _menu_update() -> None:
-    from _update import run as _run
+    from management_src.update import run as _run
 
     print()
     print("  Update")
@@ -197,7 +197,7 @@ def _menu_update() -> None:
 
 
 def _menu_uninstall() -> None:
-    from _uninstall import run as _run, remove_old_install
+    from .management_src.uninstall import run as _run, remove_old_install
 
     print()
     print("  Uninstall")
@@ -258,7 +258,7 @@ def _menu_uninstall() -> None:
         print()
         remove_old_install(old, auto_yes=False)
         if not has_new:
-            from _helpers import reset_config_path_py
+            from .management_src.helpers import reset_config_path_py
             reset_config_path_py()
             print("  Reset src/config_path.py.")
 
@@ -359,11 +359,11 @@ def _run_command(args: argparse.Namespace) -> None:
     cmd = args.command
 
     if cmd == "install":
-        from _install import run as _run
+        from .management_src.install import run as _run
         _run(auto_yes=args.yes)
 
     elif cmd == "update":
-        from _update import run as _run
+        from .management_src.update import run as _run
         _run(
             reconfigure    = args.reconfigure,
             skip_recompile = args.skip_recompile,
@@ -372,7 +372,7 @@ def _run_command(args: argparse.Namespace) -> None:
         )
 
     elif cmd == "uninstall":
-        from _uninstall import run as _run
+        from .management_src.uninstall import run as _run
         _run(
             keep_config   = args.keep_config,
             keep_venv     = args.keep_venv,

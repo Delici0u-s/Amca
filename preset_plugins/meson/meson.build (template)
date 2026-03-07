@@ -38,3 +38,4 @@ executable(amca_var__meson__executable_name,
   source_files,
   install     : true,
   install_dir : output_dir)
+

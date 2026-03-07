@@ -36,7 +36,7 @@ def _find_amca_root_dir() -> Optional[DirInfo]:
         if query_yes_no(
             "No amca root was found, would you like to create one in this directory?"
         ):
-            create_amca_root(ori_seach_path / root_folder_name)
+            create_amca_root(ori_seach_path)
             return_val = gdp.parse_dir(ori_seach_path)
         else:
             ignored_root_paths.append(str(ori_seach_path))

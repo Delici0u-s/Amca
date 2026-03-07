@@ -1,8 +1,8 @@
 import argparse
 import os
 import shlex
-from impl.amca.dirparse import DirInfo, DirParser
 
+from impl.amca.dirparse import DirInfo, DirParser
 
 def parse_args(args: list[str]) -> argparse.Namespace:
     """
@@ -10,7 +10,6 @@ def parse_args(args: list[str]) -> argparse.Namespace:
 
     Returns argparse.Namespace with normalized attributes:
       mode: Optional[str]
-      builddir: Optional[str]
       skip_reconf / skip_compile / skip_exec: booleans
       clear: bool
       s: bool  # shorthand: clear then run
@@ -19,7 +18,6 @@ def parse_args(args: list[str]) -> argparse.Namespace:
       meson_compile_args: Optional[str]
       exec_args: Optional[str]
       dry_run: bool
-      force: bool
       verbose: bool
       quiet: bool
       jobs: int
@@ -32,18 +30,8 @@ def parse_args(args: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "mode",
         nargs="?",
-        choices=["setup", "reconfigure", "compile", "run", "clean", "test"],
+        choices=["setup", "reconfigure", "compile", "install", "run", "clean", "test"],
         help="Mode to run (default pipeline if omitted)",
-    )
-
-    # builddir
-    parser.add_argument(
-        "-builddir",
-        "--builddir",
-        "-C",
-        dest="builddir",
-        metavar="DIR",
-        help="Build directory",
     )
 
     # skip: accepts -n r, -n c, -n e (can be given multiple times), or the long flags below
@@ -52,7 +40,7 @@ def parse_args(args: list[str]) -> argparse.Namespace:
         "--skip",
         dest="skip",
         action="append",
-        choices=["r", "c", "e", "reconfigure", "compile", "exec"],
+        choices=["r", "c", "e", "i", "reconfigure", "compile", "install", "exec"],
         help="Skip step. Use -n r (skip reconfigure), -n c (skip compile), -n e (skip exec). Can be repeated.",
     )
 
@@ -70,6 +58,12 @@ def parse_args(args: list[str]) -> argparse.Namespace:
         help="Do not compile",
     )
     parser.add_argument(
+        "--skip-install",
+        dest="skip_install_flag",
+        action="store_true",
+        help="Do not install",
+    )
+    parser.add_argument(
         "--skip-exec", dest="skip_exec_flag", action="store_true", help="Do not execute"
     )
 
@@ -82,12 +76,7 @@ def parse_args(args: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Remove build artifacts (safe clean)",
     )
-    parser.add_argument(
-        "--force",
-        dest="force",
-        action="store_true",
-        help="Allow destructive action [TODO: not yet used in anything lmao]",
-    )
+
 
     # shorthand -s: clear then run
     parser.add_argument(
@@ -167,17 +156,21 @@ def parse_args(args: list[str]) -> argparse.Namespace:
             skip_tokens.add("reconf")
         elif token in ("c", "compile"):
             skip_tokens.add("compile")
+        elif token in ("i", "install"):
+            skip_tokens.add("install")
         elif token in ("e", "exec"):
             skip_tokens.add("exec")
 
     parsed.skip_reconf = bool(parsed.skip_reconf_flag) or ("reconf" in skip_tokens)
     parsed.skip_compile = bool(parsed.skip_compile_flag) or ("compile" in skip_tokens)
+    parsed.skip_install = bool(parsed.skip_install_flag) or ("install" in skip_tokens)
     parsed.skip_exec = bool(parsed.skip_exec_flag) or ("exec" in skip_tokens)
 
     # Clean up helper attrs we used only for parsing
     # (leaving them is harmless, but remove for clarity)
     delattr(parsed, "skip_reconf_flag")
     delattr(parsed, "skip_compile_flag")
+    delattr(parsed, "skip_install_flag")
     delattr(parsed, "skip_exec_flag")
 
     # Normalize meson args: keep them as raw strings (caller can shlex.split when running)

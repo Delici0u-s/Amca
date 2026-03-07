@@ -52,7 +52,7 @@ def _ensure_python_path() -> None:
         raise RuntimeError("Virtual environment Python path not initialized")
 
 
-def package_install(package: str, version: str, print_output: bool = False) -> bool:
+def package_install(package: str, version: str="", print_output: bool = False) -> bool:
     """
     Install a specific package version into the venv.
     """
@@ -64,13 +64,16 @@ def package_install(package: str, version: str, print_output: bool = False) -> b
     if key in installed_pip_dependencies:
         return True
 
+    if not version == "": # check for no version
+        version = "==" + version
+
     try:
         cmd = [
             str(python_exec_path),
             "-m",
             "pip",
             "install",
-            f"{package}=={version}",
+            f"{package}{version}",
         ]
 
         print(f"Installing: {package}, with version {version}")
@@ -137,7 +140,8 @@ def create_venv() -> None:
         stderr=None if print_output else subprocess.DEVNULL,
     )
 
-    package_install("pip", "24.0")
+    package_install("pip")
+    # package_install("pip", "24.0")
 
 
 def get_conf_path(debug: bool = False) -> Path:
@@ -155,12 +159,14 @@ def get_conf_path(debug: bool = False) -> Path:
 
     amca_conf_path = config_path / "Amca"
 
-    print("Default amca_config location: ")
+    environment_override_1 = "AMCA_CONFIG_PATH"
+
+    print(f"Default amca_config location: (Env override: {environment_override_1})")
     print(amca_conf_path)
 
     # override amca_conf_path by user if he wishes
     # 1) Environment variable override
-    env_override = os.environ.get("AMCA_CONFIG_PATH") or os.environ.get("AMCA_PATH")
+    env_override = os.environ.get(environment_override_1) 
     if env_override:
         try:
             env_path = Path(env_override).expanduser().resolve()
@@ -183,7 +189,8 @@ def get_conf_path(debug: bool = False) -> Path:
                         f"Warning: invalid path supplied: {e}. Falling back to default."
                     )
         except (KeyboardInterrupt, EOFError):
-            print("Input cancelled. Using default path.")
+            print("Input cancelled, Aborting.")
+            raise SystemExit(1)
 
     if amca_conf_path.exists():
         if query_yes_no("Amca_root dir already exists, do you wish to remove it?"):
@@ -209,7 +216,8 @@ def get_conf_path(debug: bool = False) -> Path:
 
 
 def create_compiled():
-    if package_install("pyinstaller", "6.10.0"):
+    # if package_install("pyinstaller", "6.10.0"):
+    if package_install("pyinstaller"):
         src_path: Path = (Path(__file__).parent / "src").resolve()
         compiled_path: Path = (Path(__file__).parent / "compiled").resolve()
         compiled_path.mkdir(exist_ok=True)
@@ -243,10 +251,15 @@ def main():
     get_conf_path()
     # venv_path: Path | None = create_venv()
     create_venv()
-    package_install("InquirerPy", "0.3.3")
-    package_install("requests", "2.31.0")
+    # package_install("InquirerPy", "0.3.3")
+    # package_install("requests", "2.31.0")
+    package_install("InquirerPy")
+    package_install("requests")
     create_compiled()
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        SystemExit(7)

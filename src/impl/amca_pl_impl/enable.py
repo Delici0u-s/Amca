@@ -1,3 +1,4 @@
+# src/impl/amca_pl_impl/enable.py
 import impl.util.config.config as cf
 from pathlib import Path
 from impl.util.globals import global_dir_parser as gdp
@@ -5,7 +6,6 @@ from InquirerPy import inquirer
 
 
 def load():
-    # Load plugin path
     try:
         plugin_path = Path(cf.plugin_settings.get("generic.plugin_path"))
     except Exception:
@@ -23,35 +23,31 @@ def load():
         print("No plugins installed!")
         return
 
-    # Get enabled plugins
     enabled_plugins = [str(p) for p in cf.plugin_settings.get("enabled_plugins") or []]
 
-    # Remove already enabled plugins from available list
+    # Only show plugins that are not already enabled.
     available_plugins = [p for p in available_plugins if p not in enabled_plugins]
 
     if not available_plugins:
         print("All plugins are already enabled!")
         return
 
-    print("\ndisabled Plugins:")
-    # Interactive selection loop
+    print("\nDisabled plugins:")
     while True:
         choice = inquirer.select(
-            message="Pick a plugin to enable (or exit selection):",
+            message="Pick a plugin to enable (or exit):",
             choices=[*available_plugins, "Exit selection"],
         ).execute()
 
         if choice == "Exit selection":
             break
 
-        # Update enabled and available lists
         enabled_plugins.append(choice)
         available_plugins.remove(choice)
 
-        # print(f"Enabled plugins: {enabled_plugins}")
         if not available_plugins:
             print("No more plugins to enable.")
             break
 
-    # Optionally, save enabled_plugins back to config
     cf.plugin_settings.set("enabled_plugins", enabled_plugins)
+    cf.plugin_settings.save()  # BUG FIX: was missing — changes were never persisted

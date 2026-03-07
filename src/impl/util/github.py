@@ -1,3 +1,5 @@
+import warnings
+warnings.filterwarnings('ignore', message='Unable to find acceptable character detection')
 import requests
 import os
 

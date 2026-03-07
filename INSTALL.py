@@ -145,15 +145,16 @@ def create_venv() -> None:
 
 
 def get_conf_path(debug: bool = False) -> Path:
-    outp = Path()
     if debug:
         return Path(__file__).parent / "AmcaConfigTest"
 
-    # eval default path:
+    # eval default path: 
     if sys.platform.startswith("linux"):
         config_path = Path.home() / ".config"
     elif sys.platform.startswith("win"):
         config_path = Path.home() / "Documents"
+    elif sys.platform.startswith("darwin"):
+        config_path = Path.home() / "Library" / "Application Support"
     else:
         raise OSError(f"Unsupported operating system: {sys.platform}")
 
@@ -212,7 +213,7 @@ def get_conf_path(debug: bool = False) -> Path:
     with open(src_fil, "w") as f:
         f.write(src_config_file)
 
-    return outp
+    return amca_conf_path
 
 
 def create_compiled():
@@ -232,7 +233,8 @@ def create_compiled():
                 script_path,
                 "--distpath",
                 compiled_path,
-                "--onedir",
+                "--onefile",
+                # "--onedir",
                 "--strip",
                 "--noconfirm",
                 "--clean",
@@ -254,7 +256,9 @@ def main():
     # package_install("InquirerPy", "0.3.3")
     # package_install("requests", "2.31.0")
     package_install("InquirerPy")
+    package_install("chardet")
     package_install("requests")
+    # package_install("charset-normalizer")
     create_compiled()
 
 

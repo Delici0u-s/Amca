@@ -1,0 +1,14 @@
+{
+  "extreamly_important": {
+    "greet_user": true
+  },
+  "debug": false,
+  "amca_root": {
+    "folder_name": ".Amca",
+    "recursive_search_depth": 5,
+    "ignored_paths": [
+      "/home/quad/cus/programming/gits/Amca"
+    ]
+  },
+  "default_file_editor": "nano"
+}

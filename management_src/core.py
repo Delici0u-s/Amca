@@ -187,6 +187,8 @@ def setup_path(bin_dir: Path) -> Optional[str]:
 # ── Preset plugin bootstrap ───────────────────────────────────────────────────
 
 def bootstrap_preset_plugins(conf_path: Path, overwrite: bool = True) -> list[str]:
+    # dont install any plugins
+    return []
     """
     Copy every folder under repo/preset_plugins/ into the installed_plugins
     directory inside the config tree.

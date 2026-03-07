@@ -54,7 +54,7 @@ class _SettingsManager:
                 "plugin_sources",
                 [
                     gen_github_api_link(
-                        "Delici0u-s", "Amca", "rewrite", "preset_plugins"
+                        "Delici0u-s", "Amca", "main", "preset_plugins"
                     )
                 ],
             )

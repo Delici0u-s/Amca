@@ -7,5 +7,7 @@ if __name__ == "__main__":
         sys.argv[0] = __file__
         # sys.argv[0] = str(Path(sys.executable).resolve())
         sys.exit(im.main())
-    except KeyboardInterrupt:
-        sys.exit(130)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+    # except KeyboardInterrupt:
+    #     sys.exit(130)

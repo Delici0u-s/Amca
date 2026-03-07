@@ -17,7 +17,7 @@ Direct subcommands:
 Standard library ONLY — no third-party packages required to run this script.
 """
 
-from .management_src._future__ import annotations
+from __future__ import annotations
 
 import argparse
 import sys

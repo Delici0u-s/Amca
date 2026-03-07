@@ -1,7 +1,8 @@
 from impl.plugin_base import *
+import importlib
 
 
-class any(Plugin):
+class meson(Plugin):
 
     def should_load(
         self,
@@ -9,8 +10,9 @@ class any(Plugin):
         amca_root_plugin_dir: Optional[Path], # designated plugin "config" folder: "amca_root_dir.path / amca_root.folder_name / plugins / plugin_name"
         working_dir: DirInfo, # dir inwhich amca was called
         dir_parser: DirParser, # dirparser to get info on files and folders in filepath with dir_parese.parse_dir
+        args: list[str],
     ) -> bool:
-        return True
+        return True;
 
     def load(
         self,
@@ -21,10 +23,5 @@ class any(Plugin):
         args: list[str],
     ) -> None:
 
-        msg: str = "Any plugin loaded"
-        if len(args) > 0:
-            msg += " with args: "
-        for arg in args:
-            msg += f" '{arg}'"
+        print("Any loaded")
 
-        print(msg)

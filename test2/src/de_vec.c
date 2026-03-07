@@ -1,0 +1,3 @@
+#define DE_CONTAINER_VECTOR_IMPLEMENTATION
+// #define DE_OPTIONS_VECTOR_NO_SAFETY_ASSERTS
+#include <de_vector.h>

@@ -24,19 +24,10 @@ For further Documentation install [Obsidian](https://obsidian.md/) and open `obs
 ### personal notes:
 TODO:
 - test windows capabilities
-
-amcapl
-- plugin updates
-- more sources etc general polish
-- command interface, not just cli
-
-amca
-- implement all --help and config options, increase option amount
-- only call should_load on enabled plugins
-
 plugins
-- Template
-    - previous tempalte plugin
+- create
+    - Template
+        - previous tempalte plugin
 
 
 OLD AMCA TEMPLATE UPDATES REQUIRED:

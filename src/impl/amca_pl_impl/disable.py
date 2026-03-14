@@ -4,30 +4,45 @@ from impl.util.globals import global_dir_parser as gdp
 from InquirerPy import inquirer
 
 
-def load():
-    # Load plugin path
+def load(*, plugins: list[str] | None = None) -> list[str]:
+    """
+    Disable one or more plugins.
+
+    Args:
+        plugins: List of plugin names to disable. When None, uses TUI.
+
+    Returns:
+        The updated list of enabled plugin names.
+    """
     try:
         plugin_path = Path(cf.plugin_settings.get("generic.plugin_path"))
     except Exception:
         print(f"Provided plugin_path in {cf.plugin_settings._path} is not valid")
-        return
+        return []
 
     if not plugin_path.exists():
         print("Plugin path is not available, please ensure the path is valid")
-        return
+        return []
 
-    path_info = gdp.parse_dir(plugin_path)
-    all_plugins = [str(p) for p in path_info.folders]
-
-    # Get enabled plugins
     enabled_plugins = [str(p) for p in cf.plugin_settings.get("enabled_plugins") or []]
 
     if not enabled_plugins:
         print("No plugins are currently enabled!")
-        return
+        return []
 
+    # Non-interactive path
+    if plugins is not None:
+        for p in plugins:
+            if p not in enabled_plugins:
+                print(f"Plugin '{p}' is not enabled — skipping")
+                continue
+            enabled_plugins.remove(p)
+        cf.plugin_settings.set("enabled_plugins", enabled_plugins)
+        cf.plugin_settings.save()
+        return enabled_plugins
+
+    # Interactive TUI path
     print("\nEnabled Plugins:")
-    # Interactive selection loop
     while True:
         choice = inquirer.select(
             message="Pick a plugin to disable (or exit selection):",
@@ -37,14 +52,12 @@ def load():
         if choice == "Exit selection":
             break
 
-        # Update enabled plugins list
         enabled_plugins.remove(choice)
-        all_plugins.append(choice)  # optional if you want to show it again as available
 
         if not enabled_plugins:
             print("No more plugins to disable.")
             break
 
-    # Save updated enabled_plugins back to config
     cf.plugin_settings.set("enabled_plugins", enabled_plugins)
     cf.plugin_settings.save()
+    return enabled_plugins

@@ -16,7 +16,6 @@ class _SettingsManager:
         return self._all_settings[key]
 
     def __getitem__(self, key: str) -> Settings:
-        """Allow dictionary-style access: settings_manager['general']"""
         return self.get(key)
 
     def _load(self, key: str):
@@ -33,6 +32,10 @@ class _SettingsManager:
             s.default("amca_root.recursive_search_depth", 5)
             s.default("amca_root.ignored_paths", [])
             s.default("default_file_editor", "nano")
+            # Logger settings — applied post-construction in *_main.py
+            s.default("logging.log_mode", "both")          # console | file | both | silent
+            s.default("logging.min_level", "INFO")         # INFO | SUCCESS | WARN | ERROR | FATAL
+            s.default("logging.log_prefix_level", "normal")# None | minimal | simple | normal | verbose
             self._all_settings["general"] = s
 
         elif key == "plugins":

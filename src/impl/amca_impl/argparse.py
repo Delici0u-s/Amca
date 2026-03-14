@@ -40,7 +40,7 @@ def build_main_parser(plugin_folders, enabled_plugins):
 
     epilog = dedent(
         f"""
-        Amca Version 2.0.1
+        Amca Version 2.0.2
 
         Plugin passthrough:
           You can pass arbitrary arguments to enabled plugins using plugin markers:

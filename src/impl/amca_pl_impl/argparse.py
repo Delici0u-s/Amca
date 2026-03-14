@@ -17,7 +17,7 @@ def eval_args():
     parser = ap.ArgumentParser(
         prog="amcapl",
         description="Handles plugin management for AMCA",
-        epilog="Amcapl Version 0.2",
+        epilog="Amcapl Version 0.3",
     )
 
     subparsers = parser.add_subparsers(dest="mode", required=True)

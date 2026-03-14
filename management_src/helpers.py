@@ -15,7 +15,7 @@ from typing import Optional
 
 # ── Version ───────────────────────────────────────────────────────────────────
 
-AMCA_VERSION = "2.0.1"
+AMCA_VERSION = "2.0.2"
 
 # ── Shell-profile marker tags ─────────────────────────────────────────────────
 

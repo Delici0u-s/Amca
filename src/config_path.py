@@ -1,3 +1,3 @@
-config_path = "/home/quad/cus/programming/gits/Amca/dev/config"
+config_path = "/home/quad/.config/Amca"
 
 # Written by the Amca installer — do not edit manually.

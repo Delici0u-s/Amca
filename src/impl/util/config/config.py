@@ -29,6 +29,7 @@ class _SettingsManager:
             s.default("extreamly_important.greet_user", True)
             s.default("debug", False)
             s.default("amca_root.folder_name", ".Amca")
+            s.default("amca_root.ask_for_new", True)
             s.default("amca_root.recursive_search_depth", 5)
             s.default("amca_root.ignored_paths", [])
             s.default("default_file_editor", "nano")

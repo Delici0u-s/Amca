@@ -24,6 +24,7 @@ For further Documentation install [Obsidian](https://obsidian.md/) and open `obs
 ### personal notes:
 TODO:
 - test windows capabilities
+
 plugins
 - create
     - Template

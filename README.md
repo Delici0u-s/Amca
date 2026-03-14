@@ -1,8 +1,8 @@
 ### requirentments:
 - git, python3
 
-#### lugin reqs:  
--  meson:  
+#### lugin reqs:
+-  meson:
     - gcc, meson
 
 ---
@@ -10,9 +10,9 @@
 ## How to install
 call `python3 install_uninstall_update.py` in the root directory
 
-This adds `amca` and `amcapl`. use --help on each for information  
+This adds `amca` and `amcapl`. use --help on each for information
 
-install plugins with `amcapl i` which will be automatically be executed by amca based on files and dirs.  
+install plugins with `amcapl i` which will be automatically be executed by amca based on files and dirs.
 
 ---
 
@@ -35,12 +35,8 @@ amca
 - only call should_load on enabled plugins
 
 plugins
-- meson
-    - meson better error message if meson is not available
-    - more options for verbose, and implement quiet
-    - proper logging
-- autosh
-    - create plugin that automatically executes amca_script.sh/bat in current dir
+- Template
+    - previous tempalte plugin
 
 
 OLD AMCA TEMPLATE UPDATES REQUIRED:

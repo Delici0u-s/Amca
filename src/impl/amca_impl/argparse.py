@@ -6,6 +6,7 @@ import impl.util.config.config as cf
 from impl.amca_impl import new, remove, args_cli
 from impl.amca_impl.impl_execute import execute
 from impl.util.globals import global_dir_parser as gdp, amca_root_dir_info
+from impl.util.globals import root_dir
 
 
 def normalize_plugin_opt_name(folder_name: str) -> str:
@@ -44,6 +45,8 @@ def build_main_parser(plugin_folders, enabled_plugins):
               until the next plugin marker or end-of-command.
             - Plugin args are not interpreted by amca; they are handed to the plugin loader.
             - Plugin parsing is disabled for management subcommands: new (n), remove (r), args (a).
+
+          Amca config path: "{root_dir}"
         """
     )
 

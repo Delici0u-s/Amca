@@ -1,43 +1,27 @@
 """
-parse_args.py
-Convert a string to a list of tokens using console/shell parameter behaviour.
-
-Two implementations are provided:
-  - parse_args_shlex  : wraps shlex.split — O(n), handles POSIX quoting & escapes
-  - parse_args_manual : hand-rolled finite-state parser — same semantics, zero deps
+util.py
+Shared utilities for the v2_0_1 meson plugin.
 """
 
 import shlex
-from typing import Union
+import shutil
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .....amca.logger import Logger
 
 
-# ── Option A: shlex.split wrapper ────────────────────────────────────────────
+# ── Shell argument tokeniser ──────────────────────────────────────────────────
 
 def parse_args_shlex(s: str, posix: bool = True) -> list[str]:
     """
     Tokenise *s* exactly as a POSIX shell would.
 
-    Rules
-    -----
-    - Tokens are delimited by unquoted whitespace.
-    - Single-quoted strings are taken literally  ('it\\'s' → it\\'s).
-    - Double-quoted strings honour backslash escapes  ("hello\\nworld" → hello\\nworld).
-    - Backslash outside quotes escapes the next character.
-
-    Parameters
-    ----------
-    s     : Raw command string, e.g.  'cp -r "my dir" dest'
-    posix : Use POSIX mode (default True). Set False to keep surrounding quotes.
-
-    Returns
-    -------
-    List of token strings.
+    Complexity: O(n) time and space.
 
     Raises
     ------
     ValueError : on unterminated quotes or trailing backslash.
-
-    Complexity: O(n) time and space in the length of *s*.
     """
     try:
         return shlex.split(s, posix=posix)
@@ -45,24 +29,10 @@ def parse_args_shlex(s: str, posix: bool = True) -> list[str]:
         raise ValueError(f"Malformed argument string: {exc}") from exc
 
 
-# ── Option B: manual finite-state parser ─────────────────────────────────────
-
 def parse_args_manual(s: str) -> list[str]:
     """
     Tokenise *s* with shell-like rules, implemented as a single-pass FSM.
-
-    States
-    ------
-    DEFAULT      : between tokens; skip whitespace, open quotes, or start token
-    IN_TOKEN     : accumulating an unquoted token
-    IN_SINGLE    : inside '...' (no escape processing)
-    IN_DOUBLE    : inside "..." (backslash escapes \\ and \")
-
-    Advantages over shlex
-    ---------------------
-    - No stdlib dependency.
-    - Explicit state machine is easier to audit or extend.
-    - Identical O(n) complexity.
+    Zero stdlib dependency beyond builtins.
 
     Raises
     ------
@@ -84,14 +54,13 @@ def parse_args_manual(s: str) -> list[str]:
             elif ch == '"':
                 state = IN_DOUBLE
             elif ch == '\\':
-                # Escaped char starts a new token
                 i += 1
                 if i >= len(s):
                     raise ValueError("Trailing backslash")
                 buf.append(s[i])
                 state = IN_TOKEN
             elif ch.isspace():
-                pass  # skip inter-token whitespace
+                pass
             else:
                 buf.append(ch)
                 state = IN_TOKEN
@@ -115,7 +84,7 @@ def parse_args_manual(s: str) -> list[str]:
 
         elif state == IN_SINGLE:
             if ch == "'":
-                state = IN_TOKEN  # stay in token, just left the quote
+                state = IN_TOKEN
             else:
                 buf.append(ch)
 
@@ -139,20 +108,42 @@ def parse_args_manual(s: str) -> list[str]:
     return tokens
 
 
-# ── Quick demo ────────────────────────────────────────────────────────────────
+# ── Tool availability checks ──────────────────────────────────────────────────
 
-if __name__ == "__main__":
-    cases = [
-        r'cp -r "my folder" /dest',
-        r"echo 'don'\''t panic'",
-        r'git commit -m "fix: handle \"edge\" case"',
-        r'python script.py --name=Alice --verbose',
-        r'',
-    ]
+def check_meson(logger: "Logger") -> bool:
+    """
+    Verify that `meson` is available in PATH.
 
-    for raw in cases:
-        a = parse_args_shlex(raw)
-        b = parse_args_manual(raw)
-        match = "✓" if a == b else "✗ MISMATCH"
-        print(f"{match}  input : {raw!r}")
-        print(f"       tokens: {a}\n")
+    Returns False (without exiting) so callers can propagate pipeline failure
+    through the normal bool return convention.
+    """
+    if shutil.which("meson") is not None:
+        return True
+
+    logger.error(
+        "'meson' not found in PATH.\n"
+        "  Fedora/RHEL : sudo dnf install meson\n"
+        "  Debian/Ubuntu: sudo apt install meson\n"
+        "  pip (any OS) : pip install meson\n"
+        "  https://mesonbuild.com/Getting-meson.html"
+    )
+    return False
+
+
+def check_ninja(logger: "Logger") -> bool:
+    """
+    Verify that a ninja backend is available in PATH.
+    Accepts `ninja`, `ninja-build`, or `samu`.
+    """
+    for name in ("ninja", "ninja-build", "samu"):
+        if shutil.which(name) is not None:
+            return True
+
+    logger.error(
+        "No ninja-compatible backend found in PATH (tried: ninja, ninja-build, samu).\n"
+        "  Fedora/RHEL : sudo dnf install ninja-build\n"
+        "  Debian/Ubuntu: sudo apt install ninja-build\n"
+        "  pip (any OS) : pip install ninja\n"
+        "  https://ninja-build.org"
+    )
+    return False

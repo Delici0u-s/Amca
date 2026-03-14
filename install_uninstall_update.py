@@ -12,6 +12,7 @@ Direct subcommands:
                                                  [--skip-plugins] [--yes]
     python install_uninstall_update.py uninstall [--yes] [--keep-config]
                                                  [--keep-venv] [--keep-compiled]
+    python install_uninstall_update.py dev       [--venv PATH] [--config PATH] [--yes]
     python install_uninstall_update.py status
 
 Standard library ONLY — no third-party packages required to run this script.
@@ -197,7 +198,7 @@ def _menu_update() -> None:
 
 
 def _menu_uninstall() -> None:
-    from .management_src.uninstall import run as _run, remove_old_install
+    from management_src.uninstall import run as _run, remove_old_install
 
     print()
     print("  Uninstall")
@@ -258,7 +259,7 @@ def _menu_uninstall() -> None:
         print()
         remove_old_install(old, auto_yes=False)
         if not has_new:
-            from .management_src.helpers import reset_config_path_py
+            from management_src.helpers import reset_config_path_py
             reset_config_path_py()
             print("  Reset src/config_path.py.")
 
@@ -270,12 +271,22 @@ def _menu_status() -> None:
     _status_block()
 
 
+def _menu_dev() -> None:
+    from management_src.dev import run as _run
+
+    print()
+    print("  Dev — Setup")
+    print("  " + "─" * 40)
+    # Path prompts are handled inside dev.run() when auto_yes=False.
+    _run(auto_yes=False)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Interactive main loop
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _interactive() -> None:
-    top_choices = ["Install", "Update", "Uninstall", "Status"]
+    top_choices = ["Install", "Update", "Uninstall", "Status", "Dev"]
     while True:
         _banner()
         _status_block()
@@ -292,6 +303,7 @@ def _interactive() -> None:
             elif idx == 1: _menu_update()
             elif idx == 2: _menu_uninstall()
             elif idx == 3: _menu_status()
+            elif idx == 4: _menu_dev()
         except SystemExit as exc:
             # Let sub-commands raise SystemExit without killing the menu loop,
             # unless it's a real error code.
@@ -308,7 +320,7 @@ def _interactive() -> None:
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="install_uninstall_update.py",
-        description="Amca management — install, update, or uninstall.",
+        description="Amca management — install, update, uninstall, or set up a dev env.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Run without arguments for the interactive menu.\n\n"
@@ -317,6 +329,9 @@ def _build_parser() -> argparse.ArgumentParser:
             "  python install_uninstall_update.py install --yes\n"
             "  python install_uninstall_update.py update --skip-plugins\n"
             "  python install_uninstall_update.py uninstall --yes\n"
+            "  python install_uninstall_update.py dev\n"
+            "  python install_uninstall_update.py dev --venv dev/.venv --config dev/config\n"
+            "  python install_uninstall_update.py dev --yes\n"
             "  python install_uninstall_update.py status\n"
         ),
     )
@@ -349,6 +364,22 @@ def _build_parser() -> argparse.ArgumentParser:
     pun.add_argument("--keep-compiled",       action="store_true",
                      help="Keep the compiled/ directory in the repo.")
 
+    # dev
+    pd = sub.add_parser(
+        "dev",
+        help="Set up a local developer environment (venv + compile + config).",
+    )
+    pd.add_argument(
+        "--venv", metavar="PATH", default=None,
+        help="Where to create the venv (default: dev/.venv).",
+    )
+    pd.add_argument(
+        "--config", metavar="PATH", default=None,
+        help="Where to create the dev config dir (default: dev/config).",
+    )
+    pd.add_argument("--yes", "-y", action="store_true",
+                    help="Non-interactive: accept all defaults.")
+
     # status
     sub.add_parser("status", help="Show installation status and exit.")
 
@@ -359,11 +390,11 @@ def _run_command(args: argparse.Namespace) -> None:
     cmd = args.command
 
     if cmd == "install":
-        from .management_src.install import run as _run
+        from management_src.install import run as _run
         _run(auto_yes=args.yes)
 
     elif cmd == "update":
-        from .management_src.update import run as _run
+        from management_src.update import run as _run
         _run(
             reconfigure    = args.reconfigure,
             skip_recompile = args.skip_recompile,
@@ -372,13 +403,19 @@ def _run_command(args: argparse.Namespace) -> None:
         )
 
     elif cmd == "uninstall":
-        from .management_src.uninstall import run as _run
+        from management_src.uninstall import run as _run
         _run(
             keep_config   = args.keep_config,
             keep_venv     = args.keep_venv,
             keep_compiled = args.keep_compiled,
             auto_yes      = args.yes,
         )
+
+    elif cmd == "dev":
+        from management_src.dev import run as _run
+        venv_path = Path(args.venv).expanduser().resolve() if args.venv else None
+        conf_path = Path(args.config).expanduser().resolve() if args.config else None
+        _run(venv_path=venv_path, conf_path=conf_path, auto_yes=args.yes)
 
     elif cmd == "status":
         _banner()

@@ -99,7 +99,6 @@ def install_runtime_deps(py: Path) -> None:
     """Install all packages that Amca itself needs at runtime."""
     pip_install(py, "pip")
     pip_install(py, "InquirerPy")
-    pip_install(py, "chardet")
     pip_install(py, "requests")
 
 

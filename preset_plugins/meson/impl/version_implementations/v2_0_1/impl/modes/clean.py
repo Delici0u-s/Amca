@@ -45,7 +45,9 @@ def run(
 
     # Resolve paths before the build dir is removed
     executable_dir:  Path = (meson_build_dir / install_dir_name).resolve()
-    executable_path: Path = executable_dir / executable_name
+    # executable_path: Path = executable_dir / executable_name
+    exe_name = executable_name + (".exe" if os.name == "nt" else "")
+    executable_path: Path = executable_dir / exe_name
 
     # --- Clean build dir ---
     if meson_build_dir.exists():

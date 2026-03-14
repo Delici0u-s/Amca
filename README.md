@@ -3,7 +3,7 @@
 
 #### Plugin requirentments:
 -  meson:
-    - gcc, meson
+    - meson (which will require ninja, and a fitting compiler)
 
 ---
 

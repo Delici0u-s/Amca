@@ -43,7 +43,9 @@ def run(
         return False
 
     meson_build_dir:  Path = (meson_root_dir_info.path / build_dir_name).resolve()
-    executable_path:  Path = (meson_build_dir / install_dir_name / executable_name).resolve()
+    # executable_path:  Path = (meson_build_dir / install_dir_name / executable_name).resolve()
+    exe_name = executable_name + (".exe" if os.name == "nt" else "")
+    executable_path: Path = (meson_build_dir / install_dir_name / exe_name).resolve()
 
     if not executable_path.exists():
         logger.error(

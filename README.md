@@ -1,7 +1,7 @@
-### requirentments:
-- git, python3
+# requirentments:
+- python3
 
-#### lugin reqs:
+#### Plugin requirentments:
 -  meson:
     - gcc, meson
 

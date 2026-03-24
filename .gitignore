@@ -6,4 +6,5 @@ compiled/
 .Amca/
 AMCA_CONF_TEST/
 output.txt
+dev/
 

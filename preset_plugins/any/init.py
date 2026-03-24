@@ -24,4 +24,11 @@ class meson(Plugin):
     ) -> None:
 
         print("Any loaded")
+        msg: str = "Any plugin loaded"
+        if len(args) > 0:
+            msg += " with args: "
+        for arg in args:
+            msg += f" '{arg}'"
+
+        print(msg)
 

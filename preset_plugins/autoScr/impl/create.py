@@ -37,10 +37,10 @@ def _choices() -> list[dict[str, str]]:
 def _template(ext: str) -> str:
   if os.name == "nt":
     if ext == ".bat":
-      return "@echo off\r\nrem Add your script here\r\n"
+      return "@echo off\r\n"
     if ext == ".cmd":
-      return "@echo off\r\nrem Add your script here\r\n"
-    return "# Add your PowerShell script here\r\n"
+      return "@echo off\r\n"
+    return "\r\n"
 
   shebangs = {
     ".sh": "#!/usr/bin/env sh",
@@ -48,7 +48,7 @@ def _template(ext: str) -> str:
     ".zsh": "#!/usr/bin/env zsh",
   }
   shebang = shebangs.get(ext, "#!/usr/bin/env sh")
-  return f"{shebang}\n\n# Add your script here\n"
+  return f"{shebang}\n\n"
 
 
 def create_new_script(
@@ -65,11 +65,19 @@ def create_new_script(
   if assume_yes:
     ext = default_ext
   else:
-    ext = inquirer.select(
-      message="Select script type:",
-      choices=_choices(),
-      default=default_ext,
-    ).execute()
+    try:
+      ext = inquirer.select(
+        message="Select script type (or Exit to cancel):",
+        choices=_choices() + [{"name": "Exit", "value": None}],
+        default=default_ext,
+      ).execute()
+    except KeyboardInterrupt:
+      logger.warn("Creation cancelled by user (Ctrl-C).")
+      return None
+
+    if ext is None:  # User chose Exit
+      logger.warn("Creation aborted.")
+      return None
 
   script_path = directory / f"{NAME}{ext}"
   if script_path.exists():

@@ -8,12 +8,7 @@ from impl.constants import VERBOSE_FLAG
 class ParsedArgs:
   verbose: bool
   assume_yes: bool
-  create_new: bool
   forwarded_args: list[str]
-
-
-def should_create_new(args: list[str]) -> bool:
-  return any(a in ("n", "new") for a in args)
 
 
 def parse_args(args: list[str]) -> ParsedArgs:
@@ -23,12 +18,8 @@ def parse_args(args: list[str]) -> ParsedArgs:
 
   parsed, remaining = parser.parse_known_args(args)
 
-  forwarded = [a for a in remaining if a not in ("n", "new")]
-  create_new = should_create_new(remaining)
-
   return ParsedArgs(
     verbose=parsed.verbose,
     assume_yes=parsed.yes,
-    create_new=create_new,
-    forwarded_args=forwarded,
+    forwarded_args=remaining,  # everything else forwarded to script
   )

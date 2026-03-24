@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
 
-VERBOSE_FLAG = "--verbose_auto_sh"
-NAME = "amca_auto_sh"
+VERBOSE_FLAG = "--verbose_auto_scr"
+NAME = "amca_auto_script"
 
 if os.name == "nt":
   EXT_INTERPRETER: dict[str, list[str]] = {

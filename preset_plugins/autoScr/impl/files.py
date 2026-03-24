@@ -12,7 +12,7 @@ def relevant_dir(amca_root_dir: Optional[DirInfo], working_dir: DirInfo) -> Path
   return amca_root_dir.path if amca_root_dir is not None else working_dir.path
 
 
-def find_script(directory: Path, logger: Optional[Logger] = None) -> Optional[Path]:
+def _find_script_in_dir(directory: Path, logger: Optional[Logger] = None) -> Optional[Path]:
   found = [directory / name for name in CANDIDATES if (directory / name).is_file()]
 
   if len(found) > 1:
@@ -25,6 +25,25 @@ def find_script(directory: Path, logger: Optional[Logger] = None) -> Optional[Pa
     return None
 
   return found[0] if found else None
+
+
+def find_script(directory: Path, logger: Optional[Logger] = None) -> Optional[Path]:
+  return _find_script_in_dir(directory, logger)
+
+
+def find_preferred_script(
+  amca_root_dir: Optional[DirInfo],
+  working_dir: DirInfo,
+  logger: Optional[Logger] = None,
+) -> Optional[Path]:
+  working_script = _find_script_in_dir(working_dir.path, logger)
+  if working_script is not None:
+    return working_script
+
+  if amca_root_dir is not None:
+    return _find_script_in_dir(amca_root_dir.path, logger)
+
+  return None
 
 
 def build_cmd(script: Path, args: list[str], logger: Logger) -> Optional[list[str]]:

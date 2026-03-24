@@ -245,90 +245,173 @@ def _apply_overrides(parsed: ap.Namespace) -> None:
         cf.general_settings.set("logging.min_level", parsed.log_level)
         glog.set_min_level(parsed.log_level)
 
+def split_at_first_plugin_marker(argv: list[str], plugin_prefix: str) -> tuple[list[str], list[str]]:
+  first_marker_index = next(
+    (i for i, tok in enumerate(argv) if tok.startswith(plugin_prefix)),
+    len(argv),
+  )
+  return argv[:first_marker_index], argv[first_marker_index:]
 
 def eval_args():
-    # --- config ---
-    enabled_plugins = {
-        normalize_plugin_name(p)
-        for p in (cf.plugin_settings.get("enabled_plugins") or [])
-    }
-    warn_if_not_enabled = bool(
-        cf.plugin_settings.get("logging.warn_if_plugin_arg_not_enabled")
+  # --- config ---
+  enabled_plugins = {
+    normalize_plugin_name(p)
+    for p in (cf.plugin_settings.get("enabled_plugins") or [])
+  }
+  warn_if_not_enabled = bool(
+    cf.plugin_settings.get("logging.warn_if_plugin_arg_not_enabled")
+  )
+
+  # --- discovery ---
+  plugin_path = Path(cf.plugin_settings.get("generic.plugin_path"))
+  plugins = gdp.parse_dir(plugin_path).folders
+
+  raw_argv = sys.argv[1:]
+
+  early_prefix = _prescan_plugin_prefix(raw_argv)
+  if early_prefix is not None:
+    cf.plugin_settings.set("args.plugin_prefix", early_prefix)
+
+  plugin_prefix = cf.plugin_settings.get("args.plugin_prefix")
+
+  # Split once: main CLI before first plugin marker, plugin payload after it
+  main_argv, plugin_argv = split_at_first_plugin_marker(raw_argv, plugin_prefix)
+
+  # Parse plugin args only from the plugin slice
+  _, plugin_args_map = extract_plugin_args(plugin_argv, plugins)
+
+  # Filter + warn for disabled plugins
+  filtered_plugin_args: dict[str, list[str]] = {}
+  arg_path = Path()
+  if amca_root_dir_info is not None:
+    amca_root_folder = amca_root_dir_info.path / cf.general_settings.get(
+      "amca_root.folder_name"
     )
+    arg_path = amca_root_folder / "args"
 
-    # --- discovery ---
-    plugin_path = Path(cf.plugin_settings.get("generic.plugin_path"))
-    plugins = gdp.parse_dir(plugin_path).folders  # set(str)
+  for plugin, args in plugin_args_map.items():
+    norm = normalize_plugin_name(plugin)
 
-    raw_argv = sys.argv[1:]
+    if norm in enabled_plugins:
+      if amca_root_dir_info is not None:
+        plugin_arg_file = arg_path / f"{plugin}.args"
+        if plugin_arg_file.exists():
+          tf: list[str] = []
+          with plugin_arg_file.open("r", encoding="utf-8") as fh:
+            for line in fh:
+              line = line.strip()
+              if not line or line.startswith("#"):
+                continue
+              tf.append(line)
+          args = [*tf, *args]
 
-    # Pre-scan for --plugin-prefix so the override applies to plugin-arg extraction
-    early_prefix = _prescan_plugin_prefix(raw_argv)
-    if early_prefix is not None:
-        cf.plugin_settings.set("args.plugin_prefix", early_prefix)
-
-    # Disable plugin parsing for management commands
-    management_tokens = {"new", "n", "remove", "r", "args", "a"}
-    skip_plugin_parsing = any(tok in management_tokens for tok in raw_argv)
-
-    if skip_plugin_parsing:
-        remaining_argv = raw_argv
-        plugin_args_map = {p: [] for p in plugins}
+      filtered_plugin_args[plugin] = args
     else:
-        remaining_argv, plugin_args_map = extract_plugin_args(raw_argv, plugins)
-
-    # Filter + warn for disabled plugins
-    filtered_plugin_args: dict[str, list[str]] = {}
-
-    arg_path = Path()
-    if amca_root_dir_info is not None:
-        amca_root_folder = amca_root_dir_info.path / cf.general_settings.get(
-            "amca_root.folder_name"
+      filtered_plugin_args[plugin] = []
+      if args and warn_if_not_enabled:
+        print(
+          f"[amca] warning: arguments provided for disabled plugin "
+          f"'{plugin}' → ignored"
         )
-        arg_path = amca_root_folder / "args"
 
-    for plugin, args in plugin_args_map.items():
-        norm = normalize_plugin_name(plugin)
+  plugin_args_map = filtered_plugin_args
 
-        if norm in enabled_plugins:
-            if amca_root_dir_info is not None:
-                plugin_arg_file = arg_path / f"{plugin}.args"
-                if plugin_arg_file.exists():
-                    tf: list[str] = []
-                    with plugin_arg_file.open("r", encoding="utf-8") as fh:
-                        for line in fh:
-                            line = line.strip()
-                            if not line or line.startswith("#"):
-                                continue
-                            tf.append(line)
-                    args = [*tf, *args]
+  parser = build_main_parser(plugins, enabled_plugins)
+  parsed = parser.parse_args(main_argv)
 
-            filtered_plugin_args[plugin] = args
-        else:
-            filtered_plugin_args[plugin] = []
-            if args and warn_if_not_enabled:
-                print(
-                    f"[amca] warning: arguments provided for disabled plugin "
-                    f"'{plugin}' → ignored"
-                )
+  _apply_overrides(parsed)
 
-    plugin_args_map = filtered_plugin_args
+  if hasattr(parsed, "func"):
+    parsed.func(parsed, plugin_args_map)
+  else:
+    if cf.general_settings.get("debug"):
+      print("No subcommand; parsed:", parsed)
+      print("Plugin args:", plugin_args_map)
+    execute.load(parsed, plugin_args_map)
 
-    # Parse remaining args (includes config-override flags)
-    parser = build_main_parser(plugins, enabled_plugins)
-    parsed = parser.parse_args(remaining_argv)
-
-    # Apply session-only overrides before dispatch
-    _apply_overrides(parsed)
-
-    # Dispatch
-    if hasattr(parsed, "func"):
-        parsed.func(parsed, plugin_args_map)
-    else:
-        if cf.general_settings.get("debug"):
-            print("No subcommand; parsed:", parsed)
-            print("Plugin args:", plugin_args_map)
-        execute.load(parsed, plugin_args_map)
+# def eval_args():
+#     # --- config ---
+#     enabled_plugins = {
+#         normalize_plugin_name(p)
+#         for p in (cf.plugin_settings.get("enabled_plugins") or [])
+#     }
+#     warn_if_not_enabled = bool(
+#         cf.plugin_settings.get("logging.warn_if_plugin_arg_not_enabled")
+#     )
+#
+#     # --- discovery ---
+#     plugin_path = Path(cf.plugin_settings.get("generic.plugin_path"))
+#     plugins = gdp.parse_dir(plugin_path).folders  # set(str)
+#
+#     raw_argv = sys.argv[1:]
+#
+#     # Pre-scan for --plugin-prefix so the override applies to plugin-arg extraction
+#     early_prefix = _prescan_plugin_prefix(raw_argv)
+#     if early_prefix is not None:
+#         cf.plugin_settings.set("args.plugin_prefix", early_prefix)
+#
+#     # Disable plugin parsing for management commands
+#     management_tokens = {"new", "n", "remove", "r", "args", "a"}
+#     skip_plugin_parsing = any(tok in management_tokens for tok in raw_argv)
+#
+#     if skip_plugin_parsing:
+#         remaining_argv = raw_argv
+#         plugin_args_map = {p: [] for p in plugins}
+#     else:
+#         remaining_argv, plugin_args_map = extract_plugin_args(raw_argv, plugins)
+#
+#     # Filter + warn for disabled plugins
+#     filtered_plugin_args: dict[str, list[str]] = {}
+#
+#     arg_path = Path()
+#     if amca_root_dir_info is not None:
+#         amca_root_folder = amca_root_dir_info.path / cf.general_settings.get(
+#             "amca_root.folder_name"
+#         )
+#         arg_path = amca_root_folder / "args"
+#
+#     for plugin, args in plugin_args_map.items():
+#         norm = normalize_plugin_name(plugin)
+#
+#         if norm in enabled_plugins:
+#             if amca_root_dir_info is not None:
+#                 plugin_arg_file = arg_path / f"{plugin}.args"
+#                 if plugin_arg_file.exists():
+#                     tf: list[str] = []
+#                     with plugin_arg_file.open("r", encoding="utf-8") as fh:
+#                         for line in fh:
+#                             line = line.strip()
+#                             if not line or line.startswith("#"):
+#                                 continue
+#                             tf.append(line)
+#                     args = [*tf, *args]
+#
+#             filtered_plugin_args[plugin] = args
+#         else:
+#             filtered_plugin_args[plugin] = []
+#             if args and warn_if_not_enabled:
+#                 print(
+#                     f"[amca] warning: arguments provided for disabled plugin "
+#                     f"'{plugin}' → ignored"
+#                 )
+#
+#     plugin_args_map = filtered_plugin_args
+#
+#     # Parse remaining args (includes config-override flags)
+#     parser = build_main_parser(plugins, enabled_plugins)
+#     parsed = parser.parse_args(remaining_argv)
+#
+#     # Apply session-only overrides before dispatch
+#     _apply_overrides(parsed)
+#
+#     # Dispatch
+#     if hasattr(parsed, "func"):
+#         parsed.func(parsed, plugin_args_map)
+#     else:
+#         if cf.general_settings.get("debug"):
+#             print("No subcommand; parsed:", parsed)
+#             print("Plugin args:", plugin_args_map)
+#         execute.load(parsed, plugin_args_map)
 
 
 if __name__ == "__main__":

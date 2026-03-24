@@ -100,6 +100,7 @@ def install_runtime_deps(py: Path) -> None:
     pip_install(py, "pip")
     pip_install(py, "InquirerPy")
     pip_install(py, "requests")
+    # pip_install(py, "argcomplete") #this gonna be wyld in future if it works
 
 
 # ── PyInstaller compilation ───────────────────────────────────────────────────

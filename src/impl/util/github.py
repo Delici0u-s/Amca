@@ -2,6 +2,7 @@ import warnings
 warnings.filterwarnings('ignore', message='Unable to find acceptable character detection')
 import requests
 import os
+from urllib.parse import urlparse, parse_qs
 
 
 def gen_github_api_link(owner, repo, branch="main", path=""):
@@ -44,15 +45,7 @@ def list_github_contents(owner=None, repo=None, branch="main", path="", api_url=
     contents = [{"name": item["name"], "type": item["type"]} for item in data]
     return contents
 
-
-def download_github_folder(
-    owner=None, repo=None, branch="main", path="", local_dir="", api_url=None
-):
-    """
-    Download a folder from a GitHub repo recursively.
-
-    Can either provide owner/repo/branch/path or a full api_url.
-    """
+def download_github_folder(owner=None, repo=None, branch="main", path="", local_dir="", api_url=None):
     url = api_url or gen_github_api_link(owner, repo, branch, path)
     response = requests.get(url)
     response.raise_for_status()
@@ -62,20 +55,55 @@ def download_github_folder(
         local_dir = path or "root"
     os.makedirs(local_dir, exist_ok=True)
 
+    # keep the branch/ref explicit
+    ref = parse_qs(urlparse(url).query).get("ref", [branch])[0]
+
     for item in items:
         item_name = item["name"]
         item_type = item["type"]
         item_path = os.path.join(local_dir, item_name)
 
         if item_type == "dir":
-            sub_api_url = item.get("url")  # GitHub API url for subfolder
-            download_github_folder(api_url=sub_api_url, local_dir=item_path)
+            sub_path = item["path"]
+            download_github_folder(owner=owner, repo=repo, branch=ref, path=sub_path, local_dir=item_path)
         elif item_type == "file":
             file_url = item["download_url"]
             file_data = requests.get(file_url).content
             with open(item_path, "wb") as f:
                 f.write(file_data)
             print(f"Downloaded {item_path}")
+
+# def download_github_folder(
+#     owner=None, repo=None, branch="main", path="", local_dir="", api_url=None
+# ):
+#     """
+#     Download a folder from a GitHub repo recursively.
+#
+#     Can either provide owner/repo/branch/path or a full api_url.
+#     """
+#     url = api_url or gen_github_api_link(owner, repo, branch, path)
+#     response = requests.get(url)
+#     response.raise_for_status()
+#     items = response.json()
+#
+#     if not local_dir:
+#         local_dir = path or "root"
+#     os.makedirs(local_dir, exist_ok=True)
+#
+#     for item in items:
+#         item_name = item["name"]
+#         item_type = item["type"]
+#         item_path = os.path.join(local_dir, item_name)
+#
+#         if item_type == "dir":
+#             sub_api_url = item.get("url")  # GitHub API url for subfolder
+#             download_github_folder(api_url=sub_api_url, local_dir=item_path)
+#         elif item_type == "file":
+#             file_url = item["download_url"]
+#             file_data = requests.get(file_url).content
+#             with open(item_path, "wb") as f:
+#                 f.write(file_data)
+#             print(f"Downloaded {item_path}")
 
 
 def download_github_file(

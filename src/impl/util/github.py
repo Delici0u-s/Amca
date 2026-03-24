@@ -64,8 +64,10 @@ def download_github_folder(owner=None, repo=None, branch="main", path="", local_
         item_path = os.path.join(local_dir, item_name)
 
         if item_type == "dir":
-            sub_path = item["path"]
-            download_github_folder(owner=owner, repo=repo, branch=ref, path=sub_path, local_dir=item_path)
+            sub_api_url = item.get("url")
+            download_github_folder(api_url=sub_api_url, local_dir=item_path)
+            # sub_path = item["path"]
+            # download_github_folder(owner=owner, repo=repo, branch=ref, path=sub_path, local_dir=item_path)
         elif item_type == "file":
             file_url = item["download_url"]
             file_data = requests.get(file_url).content

@@ -14,14 +14,18 @@ from InquirerPy import inquirer
 
 
 def _find_and_download(plugin_name: str, plugin_path: Path, sources: list) -> bool:
+    # print("''''''''''''''''''''''''''''''''''''##")
+    # print(sources)
+    # print("''''''''''''''''''''''''''''''''''''##")
     """Re-download plugin_name from the first matching source. Returns True on success."""
     for source in sources:
         if isinstance(source, str) and source.startswith("https://api.github.com/"):
             base = source.split("?ref=")[0] if "?ref=" in source else source
             branch = source.split("?ref=")[1] if "?ref=" in source else "main"
             api_url = f"{base}/{plugin_name}?ref={branch}"
+            print(api_url)
             try:
-                github.download_github_folder(api_url=api_url, local_dir=plugin_path / plugin_name)
+                github.download_github_folder(api_url=api_url, local_dir=str(plugin_path / plugin_name))
                 return True
             except Exception as e:
                 print(f"  [github url] failed: {e}")
@@ -48,7 +52,7 @@ def _find_and_download(plugin_name: str, plugin_path: Path, sources: list) -> bo
                     repo=source.get("repo"),
                     branch=source.get("branch", "main"),
                     path=full_path,
-                    local_dir=plugin_path / plugin_name,
+                    local_dir=str(plugin_path / plugin_name),
                 )
                 return True
             except Exception as e:

@@ -1,0 +1,21 @@
+{
+  "args": {
+    "plugin_prefix": "---"
+  },
+  "generic": {
+    "exit_on_plugin_error": false,
+    "exit_on_plugin_not_found": false,
+    "plugin_path": "/home/quad/cus/programming/gits/Amca/dev/config/Amca_config/plugins/installed_plugins"
+  },
+  "enabled_plugins": [
+    "any"
+  ],
+  "logging": {
+    "warn_if_plugin_not_found": true,
+    "warn_if_plugin_arg_not_enabled": true,
+    "print_loaded": true
+  },
+  "plugin_sources": [
+    "https://api.github.com/repos/Delici0u-s/Amca/contents/preset_plugins?ref=main"
+  ]
+}

@@ -41,7 +41,7 @@ def _download_plugin(choice: str, plugin_path: Path, sources: list, installed_pl
             branch = source.split("?ref=")[1] if "?ref=" in source else "main"
             api_url = f"{base}/{choice}?ref={branch}"
             try:
-                github.download_github_folder(api_url=api_url, local_dir=plugin_path / choice)
+                github.download_github_folder(api_url=api_url, local_dir=str(plugin_path / choice))
                 return True
             except Exception as e:
                 print(f"Download failed from GitHub URL source: {e}")
@@ -69,7 +69,7 @@ def _download_plugin(choice: str, plugin_path: Path, sources: list, installed_pl
                     repo=source.get("repo"),
                     branch=source.get("branch", "main"),
                     path=full_path,
-                    local_dir=plugin_path / choice,
+                    local_dir=str(plugin_path / choice),
                 )
                 return True
             except Exception as e:

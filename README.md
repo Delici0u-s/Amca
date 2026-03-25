@@ -23,12 +23,12 @@ For further Documentation install [Obsidian](https://obsidian.md/) and open `obs
 
 ### personal notes:
 TODO:
-- test windows capabilities
-
+- fix install pip abstraction
 plugins
 - create
     - Template
         - previous tempalte plugin
+- implement python dependencies capabilities
 
 
 OLD AMCA TEMPLATE UPDATES REQUIRED:

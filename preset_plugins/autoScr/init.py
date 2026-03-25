@@ -85,7 +85,8 @@ class autoscript(Plugin):
         return
 
       logger.log(f"Running: {' '.join(cmd)}")
-      subprocess.call(cmd, cwd=script.parent)
+      subprocess.call(cmd, cwd=working_dir.path)
+      # subprocess.call(cmd, cwd=script.parent)
 
     except KeyboardInterrupt:
       logger.warn("Operation cancelled by user (Ctrl-C).")
